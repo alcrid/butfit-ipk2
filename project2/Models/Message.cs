@@ -1,6 +1,6 @@
 namespace project2.Models;
 
-public class Message
+public abstract class Message
 {
-    
+    public abstract string? Serialize(); 
 }
