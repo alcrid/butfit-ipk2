@@ -3,16 +3,16 @@ using project2.Models;
 
 namespace project2.Utils;
 
-public class MessageBuffer
+public class MessageBuffer<T> where T : Message
 {
-    private readonly ConcurrentQueue<Message> _buffer = new();
+    private readonly ConcurrentQueue<T> _buffer = new();
 
-    public void Add(Message message)
+    public void Add(T message)
     {
         _buffer.Enqueue(message);
     }
 
-    public bool TryGet(out Message? message)
+    public bool TryGet(out T? message)
     {
         return _buffer.TryDequeue(out message);
     }
@@ -21,5 +21,5 @@ public class MessageBuffer
 
     public int Count => _buffer.Count;
 
-    public IEnumerable<Message> GetAll() => _buffer.ToArray();
+    public IEnumerable<T> GetAll() => _buffer.ToArray();
 }
