@@ -63,9 +63,6 @@ internal static class Program
             Console.Error.WriteLine("ERROR: Server and protocol are required.");
             Environment.Exit(1);
         }
-
-        IPAddress[] ipAddresses = Dns.GetHostAddresses(server);
-        IPAddress serverIp = ipAddresses[0];
         
         var loggerFactory = LoggerFactory.Create(builder =>
         {
@@ -77,16 +74,9 @@ internal static class Program
         });
         var logger = loggerFactory.CreateLogger<TcpMessageClient>();
 
-        // using var cts = new CancellationTokenSource();
-        // Console.CancelKeyPress += (s, e) =>
-        // {
-        //     e.Cancel = true;
-        //     cts.Cancel();
-        // };
-
         if (protocol == "tcp")
         {
-            TcpMessageClient client = new TcpMessageClient(serverIp, port, logger);
+            TcpMessageClient client = new TcpMessageClient(server, port, logger);
             client.StartCommunication();
         }
     }

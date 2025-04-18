@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace project2.Models;
 
-public class TcpMessageClient(IPAddress serverIp, int port, ILogger<TcpMessageClient> logger) : MessageClient
+public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient> logger) : MessageClient
 {
     private TcpClient? _tcpClient;
     private StreamReader? _reader;
@@ -40,7 +40,7 @@ public class TcpMessageClient(IPAddress serverIp, int port, ILogger<TcpMessageCl
             };
 
             _tcpClient = new TcpClient(AddressFamily.InterNetwork);
-            _tcpClient.Connect(serverIp, port);
+            _tcpClient.Connect(server, port);
             State = ClientState.start;
 
             var stream = _tcpClient.GetStream();
@@ -66,89 +66,86 @@ public class TcpMessageClient(IPAddress serverIp, int port, ILogger<TcpMessageCl
     {
         try
         {
-
+           var buffer = string.Empty;
            while (!_token.IsCancellationRequested)
             {
-                string? line = await _reader!.ReadLineAsync(_token);
+                char[] chunk = new char[1024];
+                int read = await _reader!.ReadAsync(chunk, 0, chunk.Length,_token);
 
-                if (line == null)
+                if (read == 0)
                 {
-                    Console.WriteLine("Connection closed by server.");
+                    EndCommunication();
                     break;
                 }
+                buffer += new string(chunk, 0, read);
 
-                // ifnot ends with "\n\r"
-                // lalst mess = string.emtpy();
-                // message += content 
-                // if(mess != string empty)
-                //     pridat
-                //     if end with spracovat 
+                string[] messages = buffer.Split("\r\n");
+
+                for (int i = 0; i < parts.Length - 1; i++)
+                {
+                    string line = parts[i].Trim();
+                    _logger.LogInformation("Received: {line}", line);
+
+                    if (line.StartsWith("ERR FROM ", StringComparison.OrdinalIgnoreCase) ||
+                        line.StartsWith("BYE FROM ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine(line);
+                        _logger.LogWarning("Received terminal message from server. Closing...");
+                        EndCommunication();
+                        return; 
+                    }
+                    switch (State)
+                    {
+                        case ClientState.start:
+                            break;
+
+                        case ClientState.auth:
+                            if (line.StartsWith("REPLY OK IS ", StringComparison.OrdinalIgnoreCase) && WaitingForAuthReply)
+                            {
+                                State = ClientState.open;
+                                _user.setIsAuthenticated(true);
+                                WaitingForAuthReply = false;
+                            }
+                            else if (line.StartsWith("REPLY NOK IS ", StringComparison.OrdinalIgnoreCase) && WaitingForAuthReply)
+                            {
+                                State = ClientState.auth;
+                                WaitingForAuthReply = false;
+                            }
+                            else{
+                                State = ClientState.end;
+                                SendErrAndEndCommunication("Invalid reponse from server");
+                            }
+                            break;
+
+                        case ClientState.open:
+                            if (line.StartsWith("REPLY IS OK ", StringComparison.OrdinalIgnoreCase) ||
+                            line.StartsWith("REPLY IS NOK ", StringComparison.OrdinalIgnoreCase))
+                            {
+                                State = ClientState.end;
+                                SendErrAndEndCommunication("Unexpected REPLY received in OPEN state.");
+                            }else{
+                                Console.WriteLine(line);
+                            }
+        
+                            break;
+                        case ClientState.join:
+                        if ((line.StartsWith("REPLY OK IS ", StringComparison.OrdinalIgnoreCase) ||
+                            line.StartsWith("REPLY NOK IS ", StringComparison.OrdinalIgnoreCase) ) && WaitingForJoinReply)
+                            {
+                                State = ClientState.open;
+                                WaitingForJoinReply = false;
+                            }else{
+                                Console.WriteLine(line);
+                            }
+                            break;
+
+                        case ClientState.end:
+                            return;
+                    }
+                }
                 
-
-                _logger.LogDebug("Received: {line}", line);
-
-                if (line.StartsWith("ERR FROM ", StringComparison.OrdinalIgnoreCase) ||
-                    line.StartsWith("BYE FROM ", StringComparison.OrdinalIgnoreCase))
-                {
-                    Console.WriteLine(line);
-                    _logger.LogWarning("Received terminal message from server. Closing...");
-                    EndCommunication();
-                    return; 
-                }
-                switch (State)
-                {
-                    case ClientState.start:
-                        break;
-
-                    case ClientState.auth:
-                        if (line.StartsWith("REPLY IS OK ", StringComparison.OrdinalIgnoreCase) && WaitingForAuthReply)
-                        {
-                            Console.WriteLine($"Action Success: {line.Substring(13)}");
-                            State = ClientState.open;
-                            // user is now auth
-                            _user.setIsAuthenticated(true);
-                            WaitingForAuthReply = false;
-                        }
-                        else if (line.StartsWith("REPLY IS NOK ", StringComparison.OrdinalIgnoreCase) && WaitingForAuthReply)
-                        {
-                            Console.WriteLine($"Action Failure: {line.Substring(14)}");
-                            State = ClientState.auth;
-                            WaitingForAuthReply = false;
-                        }
-                        else{
-                            State = ClientState.end;
-                            SendErrAndEndCommunication("Invalid reponse from server");
-                        }
-                        break;
-
-                    case ClientState.open:
-                        if (line.StartsWith("REPLY IS OK ", StringComparison.OrdinalIgnoreCase) ||
-                        line.StartsWith("REPLY IS NOK ", StringComparison.OrdinalIgnoreCase))
-                        
-                        {
-                            State = ClientState.end;
-                            SendErrAndEndCommunication("Unexpected REPLY received in OPEN state.");
-                        }else{
-                            // MSG
-                            Console.WriteLine(line);
-                        }
-     
-                        break;
-                    case ClientState.join:
-                      if (line.StartsWith("REPLY OK IS ", StringComparison.OrdinalIgnoreCase) ||
-                        line.StartsWith("REPLY NOK IS ", StringComparison.OrdinalIgnoreCase))
-                        {
-                            State = ClientState.open;
-                            WaitingForJoinReply = false;
-                        }else{
-                            // MSG
-                            Console.WriteLine(line);
-                        }
-                        break;
-
-                    case ClientState.end:
-                        return;
-                }
+                // the last message becomes the buffer
+                buffer = parts[parts.Length-1];
             }
         }
         catch (Exception ex)
@@ -204,7 +201,7 @@ public class TcpMessageClient(IPAddress serverIp, int port, ILogger<TcpMessageCl
                             MessageArgs = args
                         });
 
-                        _logger.LogDebug($"Display name changed to {_user.DisplayName}");
+                        _logger.LogInformation($"Display name changed to {_user.DisplayName}");
                         break;
 
                     case "/help":
@@ -236,7 +233,6 @@ public class TcpMessageClient(IPAddress serverIp, int port, ILogger<TcpMessageCl
     {
         while (!_token.IsCancellationRequested)
         {
-
             if (_messageBuffer.IsEmpty)
             {
                 await Task.Delay(100);
@@ -406,11 +402,12 @@ public class TcpMessageClient(IPAddress serverIp, int port, ILogger<TcpMessageCl
             var serializedMsg = errMessage.Serialize(out var error);
             if (!string.IsNullOrEmpty(error))
             {
-                _logger.LogWarning("Failed to serialize ERR message: {Error}", error);
+                _logger.LogInformation("Failed to serialize ERR message: {Error}", error);
             }
             else
             {
                 _writer?.WriteLine(serializedMsg);
+                _logger.LogInformation("Invalid reply from server");
             }
         }
         catch (Exception ex)
