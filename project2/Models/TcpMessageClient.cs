@@ -237,7 +237,6 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
         }
     }
 
-
     private async Task SendBufferedMessagesAsync()
     {
         while (!_token.IsCancellationRequested)
@@ -284,7 +283,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                             break;
                         }
 
-                        await _writer!.WriteLineAsync(byeSerialized);
+                        await _writer!.WriteAsync(byeSerialized);
                         logger.LogInformation("Sent BYE to server.");
                         _messageBuffer.TryGet(out _);
                         EndCommunication();
@@ -307,7 +306,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                             break;
                         }
 
-                        await _writer!.WriteLineAsync(joinSerialized);
+                        await _writer!.WriteAsync(joinSerialized);
                         _messageBuffer.TryGet(out _);
                         _state = ClientState.join;
                         WaitingForJoinReply = true;
@@ -316,6 +315,13 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                         if (_user.isAuthenticated)
                         {
                             Console.WriteLine("ERROR: Already authenticated.");
+                            _messageBuffer.TryGet(out _);
+                            break;
+                        }
+
+                        if (message.MessageArgs.Length != 3)
+                        {
+                            Console.WriteLine("ERROR: Usage: /auth <username> <secret> <displayName>");
                             _messageBuffer.TryGet(out _);
                             break;
                         }
@@ -337,7 +343,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                             break;
                         }
 
-                        await _writer!.WriteLineAsync(authSerialized);
+                        await _writer!.WriteAsync(authSerialized);
                         _messageBuffer.TryGet(out _);
                         _state = ClientState.auth;
                         WaitingForAuthReply = true;
@@ -360,8 +366,8 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                             break;
                         }
 
-                        await _writer!.WriteLineAsync(msgSerialized);
-                        _messageBuffer.TryGet(out _);
+                        await _writer!.WriteAsync(msgSerialized);
+                    _messageBuffer.TryGet(out _);
                         break;
                 }
             }

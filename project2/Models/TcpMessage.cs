@@ -1,4 +1,5 @@
 using project2.Enums;
+using System.Text.RegularExpressions;
 
 namespace project2.Models;
 
@@ -9,6 +10,7 @@ public class TcpMessage : Message
     public string[] MessageArgs { get; set; } = Array.Empty<string>();
     public string DisplayName { get; set; } = "Unknown";
     public string Secret { get; set; } = string.Empty;
+    private static readonly Regex ChannelIdRegex = new(@"^[a-zA-Z0-9_-]{1,20}$");
 
     public void SetDisplayName(string displayName)
     {
@@ -33,7 +35,11 @@ public class TcpMessage : Message
             case MessageType.JOIN:
                 if (MessageArgs.Length != 1)
                 {
-                    error = "ERROR: Usage: /join <channelId>";
+                    error = "ERROR: usage: /join <channelid>";
+                    return string.Empty;
+                }
+                else if(!IsChannelIdValid(MessageArgs[0])){
+                    error = "ERROR: Invalid channelId provided";
                     return string.Empty;
                 }
 
@@ -47,7 +53,7 @@ public class TcpMessage : Message
                 }
 
                 return $"MSG FROM {DisplayName} IS {Content}\r\n";
-
+                
             case MessageType.ERR:
                 if (string.IsNullOrWhiteSpace(Content))
                 {
@@ -68,4 +74,6 @@ public class TcpMessage : Message
                 return string.Empty;
         }
     }
+
+    private static bool IsChannelIdValid(string input) => ChannelIdRegex.IsMatch(input);
 }
