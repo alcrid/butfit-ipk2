@@ -46,7 +46,7 @@ public class User
 
     public bool SetSecret(string secret, out string error)
     {
-        if (!InputValidator.IsValidSecret(secret))
+        if (!IsValidSecret(secret))
         {
             error = "ERROR: Invalid secret.\n";
             return false;

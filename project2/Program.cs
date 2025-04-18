@@ -1,5 +1,4 @@
-﻿using System.Net;
-using project2.Models;
+﻿using project2.Models;
 using Microsoft.Extensions.Logging;
 
 internal static class Program
@@ -63,7 +62,7 @@ internal static class Program
             Console.Error.WriteLine("ERROR: Server and protocol are required.");
             Environment.Exit(1);
         }
-        
+
         var loggerFactory = LoggerFactory.Create(builder =>
         {
             builder.AddSimpleConsole(o =>

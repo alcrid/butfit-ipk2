@@ -8,9 +8,10 @@ public class TcpMessage : Message
     public string Content { get; set; } = string.Empty;
     public string[] MessageArgs { get; set; } = Array.Empty<string>();
     public string DisplayName { get; set; } = "Unknown";
-    public string Secret { get; set; } = string.Empty; 
+    public string Secret { get; set; } = string.Empty;
 
-    public void SetDisplayName(string displayName){
+    public void SetDisplayName(string displayName)
+    {
         DisplayName = displayName;
     }
 
@@ -67,5 +68,4 @@ public class TcpMessage : Message
                 return string.Empty;
         }
     }
-
 }
