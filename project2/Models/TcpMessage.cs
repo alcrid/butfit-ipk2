@@ -5,104 +5,67 @@ namespace project2.Models;
 public class TcpMessage : Message
 {
     public MessageType Type { get; set; }
-    public string DisplayName { get; set; } = "Unknown";
     public string Content { get; set; } = string.Empty;
-    public string Username { get; set; } = string.Empty; 
+    public string[] MessageArgs { get; set; } = Array.Empty<string>();
+    public string DisplayName { get; set; } = "Unknown";
     public string Secret { get; set; } = string.Empty; 
-    public string ChannelId { get; set; } = string.Empty; 
 
-    public override string Serialize()
-    {
-        return Type switch
-        {
-            MessageType.AUTH => $"AUTH {Username} AS {DisplayName} USING {Secret}\r\n",
-            MessageType.JOIN => $"JOIN {ChannelId} AS {DisplayName}\r\n",
-            MessageType.MSG => $"MSG FROM {DisplayName} IS {Content}\r\n",
-            MessageType.ERR => $"ERR FROM {DisplayName} IS {Content}\r\n",
-            MessageType.REPLY => $"REPLY {Content}\r\n",
-            MessageType.BYE => $"BYE FROM {DisplayName}\r\n",
-            _ => throw new InvalidOperationException("Unsupported message type.")
-        };
+    public void SetDisplayName(string displayName){
+        DisplayName = displayName;
     }
-    public bool IsValid(out string errorMessage)
+
+    public override string Serialize(out string error)
     {
+        error = string.Empty;
+
         switch (Type)
         {
             case MessageType.AUTH:
-                if (!IsValidId(Username))
+                if (MessageArgs.Length != 3)
                 {
-                    errorMessage = "ERROR: Invalid username.\n";
-                    return false;
+                    error = "ERROR: Usage: /auth <username> <secret> <displayName>";
+                    return string.Empty;
                 }
-                if (!IsValidDisplayName(DisplayName))
-                {
-                    errorMessage = "ERROR: Invalid display name.\n";
-                    return false;
-                }
-                if (!IsValidSecret(Secret))
-                {
-                    errorMessage = "ERROR: Invalid secret.\n";
-                    return false;
-                }
-                break;
+
+                return $"AUTH {MessageArgs[0]} AS {MessageArgs[2]} USING {MessageArgs[1]}\r\n";
 
             case MessageType.JOIN:
-                if (!IsValidId(ChannelId))
+                if (MessageArgs.Length != 1)
                 {
-                    errorMessage = "ERROR: Invalid channel ID.\n";
-                    return false;
+                    error = "ERROR: Usage: /join <channelId>";
+                    return string.Empty;
                 }
-                if (!IsValidDisplayName(DisplayName))
-                {
-                    errorMessage = "ERROR: Invalid display name.\n";
-                    return false;
-                }
-                break;
+
+                return $"JOIN {MessageArgs[0]} AS {DisplayName}\r\n";
 
             case MessageType.MSG:
-                if (!IsValidDisplayName(DisplayName))
-                {
-                    errorMessage = "ERROR: Invalid display name.\n";
-                    return false;
-                }
                 if (Content.Length > 60000)
                 {
-                    errorMessage = "ERROR: Message content too long and was truncated.\n";
-                    Content = Content[..60000];   
-                    return false;
+                    error = "ERROR: Message content too long and was truncated.";
+                    Content = Content[..60000];
                 }
-                break;
+
+                return $"MSG FROM {DisplayName} IS {Content}\r\n";
+
+            case MessageType.ERR:
+                if (string.IsNullOrWhiteSpace(Content))
+                {
+                    error = "ERROR: Error message content cannot be empty.";
+                    return string.Empty;
+                }
+
+                return $"ERR FROM {DisplayName} IS {Content}\r\n";
+
+            case MessageType.REPLY:
+                return $"REPLY {Content}\r\n";
 
             case MessageType.BYE:
-            case MessageType.ERR:
-                if (!IsValidDisplayName(DisplayName))
-                {
-                    errorMessage = "ERROR: Invalid display name.\n";
-                    return false;
-                }
-                if (Type == MessageType.ERR && string.IsNullOrWhiteSpace(Content))
-                {
-                    errorMessage = "ERROR: Error message content cannot be empty.\n";
-                    return false;
-                }
-                break;
+                return $"BYE FROM {DisplayName}\r\n";
+
+            default:
+                error = "ERROR: Unknown message type.";
+                return string.Empty;
         }
-
-        errorMessage = "";
-        return true;
     }
-
-    // Validation helpers
-    private static bool IsValidId(string input) =>
-        input.Length is > 0 and <= 20 &&
-        input.All(c => char.IsLetterOrDigit(c) || c == '_' || c == '-');
-
-    private static bool IsValidDisplayName(string input) =>
-        input.Length is > 0 and <= 20 &&
-        input.All(c => c >= 0x21 && c <= 0x7E);
-
-    private static bool IsValidSecret(string input) =>
-        input.Length is > 0 and <= 128 &&
-        input.All(c => char.IsLetterOrDigit(c) || c == '_' || c == '-');
 
 }

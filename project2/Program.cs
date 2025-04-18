@@ -77,16 +77,16 @@ internal static class Program
         });
         var logger = loggerFactory.CreateLogger<TcpMessageClient>();
 
-        using var cts = new CancellationTokenSource();
-        Console.CancelKeyPress += (s, e) =>
-        {
-            e.Cancel = true;
-            cts.Cancel();
-        };
+        // using var cts = new CancellationTokenSource();
+        // Console.CancelKeyPress += (s, e) =>
+        // {
+        //     e.Cancel = true;
+        //     cts.Cancel();
+        // };
 
         if (protocol == "tcp")
         {
-            TcpMessageClient client = new TcpMessageClient(serverIp, port, cts.Token, logger);
+            TcpMessageClient client = new TcpMessageClient(serverIp, port, logger);
             client.StartCommunication();
         }
     }

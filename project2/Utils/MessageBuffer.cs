@@ -17,7 +17,7 @@ public class MessageBuffer<T> where T : Message
         return _buffer.TryDequeue(out message);
     }
 
-        public T? Peek() => _buffer.TryPeek(out var result) ? result : null;
+    public T? Peek() => _buffer.TryPeek(out var result) ? result : null;
 
     public bool IsEmpty => _buffer.IsEmpty;
 }

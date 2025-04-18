@@ -1,6 +1,6 @@
 namespace project2.Interfaces;
 
-public interface ITcpMessageClient
+public interface MessageClient
 {
     void StartCommunication();
 }

@@ -10,5 +10,6 @@ public enum MessageType
     BYE,
     PING,
     CONFIRM,
+    RENAME,
     UNKNOWN 
 }

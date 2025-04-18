@@ -1,4 +1,3 @@
-// Updated TcpMessageClient.cs using simplified FSM states
 using System.Net;
 using System.Net.Sockets;
 using project2.Enums;
@@ -8,25 +7,39 @@ using Microsoft.Extensions.Logging;
 
 namespace project2.Models;
 
-public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken token, ILogger<TcpMessageClient> logger) : ITcpMessageClient
+public class TcpMessageClient(IPAddress serverIp, int port, ILogger<TcpMessageClient> logger) : MessageClient
 {
     private TcpClient? _tcpClient;
     private StreamReader? _reader;
     private StreamWriter? _writer;
-    private readonly CancellationToken _token = token;
+    private readonly CancellationTokenSource _cts = new();
+    private CancellationToken _token;
     private readonly User _user = new();
     private readonly MessageBuffer<TcpMessage> _messageBuffer = new();
     public ClientState State;
     private readonly ILogger<TcpMessageClient> _logger = logger;
     private bool WaitingForAuthReply = false;
     private bool WaitingForJoinReply = false;
-
-    public async void StartCommunication()
+    
+    public void StartCommunication()
     {
         try
         {
-            _logger.LogInformation("test test");
-            _tcpClient = new TcpClient();
+            _token = _cts.Token;
+            
+            Console.CancelKeyPress += (s, e) =>
+            {
+                e.Cancel = true;
+                _messageBuffer.Add(new TcpMessage
+                {
+                    Type = MessageType.BYE,
+                    DisplayName = _user.DisplayName
+                });
+
+                _logger.LogInformation("Ctrl+C detected — BYE message enqueued.");
+            };
+
+            _tcpClient = new TcpClient(AddressFamily.InterNetwork);
             _tcpClient.Connect(serverIp, port);
             State = ClientState.start;
 
@@ -36,7 +49,6 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
 
             _ = Task.Run(ReceiveMessagesAsync, _token);
             _ = Task.Run(SendBufferedMessagesAsync, _token);
-
             ProcessUserInput();
         }
 
@@ -54,7 +66,8 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
     {
         try
         {
-            while (!_token.IsCancellationRequested)
+
+           while (!_token.IsCancellationRequested)
             {
                 string? line = await _reader!.ReadLineAsync(_token);
 
@@ -63,6 +76,14 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
                     Console.WriteLine("Connection closed by server.");
                     break;
                 }
+
+                // ifnot ends with "\n\r"
+                // lalst mess = string.emtpy();
+                // message += content 
+                // if(mess != string empty)
+                //     pridat
+                //     if end with spracovat 
+                
 
                 _logger.LogDebug("Received: {line}", line);
 
@@ -74,43 +95,55 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
                     EndCommunication();
                     return; 
                 }
-                   switch (State)
+                switch (State)
                 {
                     case ClientState.start:
-                        // can recieve anyting in this state
-                        // if (line.StartsWith("REPLY OK IS ", StringComparison.OrdinalIgnoreCase) && WaitingForAuthReply)
-                        // {
-                        //     Console.WriteLine($"Action Success: {line.Substring(13)}");
-                        //     State = ClientState.auth;
-                        //     WaitingForAuthReply = false;
-                        // }
-                        // else if (line.StartsWith("REPLY NOK IS ", StringComparison.OrdinalIgnoreCase) && WaitingForAuthReply)
-                        // {
-                        //     Console.WriteLine($"Action Failure: {line.Substring(14)}");
-                        //     State = ClientState.start;
-                        //     WaitingForAuthReply = false;
-                        // }
                         break;
 
                     case ClientState.auth:
-                        if (line.StartsWith("REPLY OK IS ", StringComparison.OrdinalIgnoreCase) && WaitingForJoinReply)
+                        if (line.StartsWith("REPLY IS OK ", StringComparison.OrdinalIgnoreCase) && WaitingForAuthReply)
                         {
                             Console.WriteLine($"Action Success: {line.Substring(13)}");
                             State = ClientState.open;
-                            WaitingForJoinReply = false;
+                            // user is now auth
+                            _user.setIsAuthenticated(true);
+                            WaitingForAuthReply = false;
                         }
-                        else if (line.StartsWith("REPLY NOK IS ", StringComparison.OrdinalIgnoreCase) && WaitingForJoinReply)
+                        else if (line.StartsWith("REPLY IS NOK ", StringComparison.OrdinalIgnoreCase) && WaitingForAuthReply)
                         {
                             Console.WriteLine($"Action Failure: {line.Substring(14)}");
                             State = ClientState.auth;
-                            WaitingForJoinReply = false;
+                            WaitingForAuthReply = false;
+                        }
+                        else{
+                            State = ClientState.end;
+                            SendErrAndEndCommunication("Invalid reponse from server");
                         }
                         break;
 
                     case ClientState.open:
-                        Console.WriteLine(line);
+                        if (line.StartsWith("REPLY IS OK ", StringComparison.OrdinalIgnoreCase) ||
+                        line.StartsWith("REPLY IS NOK ", StringComparison.OrdinalIgnoreCase))
+                        
+                        {
+                            State = ClientState.end;
+                            SendErrAndEndCommunication("Unexpected REPLY received in OPEN state.");
+                        }else{
+                            // MSG
+                            Console.WriteLine(line);
+                        }
+     
                         break;
                     case ClientState.join:
+                      if (line.StartsWith("REPLY OK IS ", StringComparison.OrdinalIgnoreCase) ||
+                        line.StartsWith("REPLY NOK IS ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            State = ClientState.open;
+                            WaitingForJoinReply = false;
+                        }else{
+                            // MSG
+                            Console.WriteLine(line);
+                        }
                         break;
 
                     case ClientState.end:
@@ -137,7 +170,6 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
                     Type = MessageType.BYE,
                     DisplayName = _user.DisplayName
                 });
-                EndCommunication();
                 break;
             }
 
@@ -146,67 +178,33 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
 
                 var parts = input.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
                 var command = parts[0].ToLower();
-
+                var args = parts.Skip(1).ToArray();
                 switch (command)
                 {
                     case "/auth":
-
-                        if (parts.Length != 4)
-                        {
-                            Console.WriteLine("ERROR: Usage: /auth <username> <secret> <displayName>");
-                            break;
-                        }
-
-                        if (!_user.SetUsername(parts[1], out var err) ||
-                            !_user.SetSecret(parts[2], out err) ||
-                            !_user.SetDisplayName(parts[3], out err))
-                        {
-                            Console.Write(err);
-                            break;
-                        }
-
                         _messageBuffer.Add(new TcpMessage
                         {
                             Type = MessageType.AUTH,
-                            Username = _user.Username,
-                            Secret = _user.Secret,
-                            DisplayName = _user.DisplayName
+                            MessageArgs = args
                         });
-                        WaitingForAuthReply = true;
-
                         break;
 
                     case "/join":
-                        if (State != ClientState.auth && State != ClientState.join)
-                        {
-                            Console.WriteLine("ERROR: You must be authenticated before joining a channel.\n");
-                            break;
-                        }
-
-                        if (parts.Length != 2)
-                        {
-                            Console.WriteLine("ERROR: Usage: /join <channelId>");
-                            break;
-                        }
-
                         _messageBuffer.Add(new TcpMessage
                         {
                             Type = MessageType.JOIN,
-                            ChannelId = parts[1],
-                            DisplayName = _user.DisplayName
+                            MessageArgs = args
                         });
-                        WaitingForJoinReply = true;
                         break;
 
                     case "/rename":
-                        var error = string.Empty;
-                        if (parts.Length != 2 || !_user.SetDisplayName(parts[1], out error))
+                        _messageBuffer.Add(new TcpMessage
                         {
-                            Console.WriteLine(error, " f");
-                            break;
-                        }
+                            Type = MessageType.RENAME,
+                            MessageArgs = args
+                        });
 
-                        Console.WriteLine($"Display name changed to {_user.DisplayName}");
+                        _logger.LogDebug($"Display name changed to {_user.DisplayName}");
                         break;
 
                     case "/help":
@@ -218,26 +216,11 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
                                           """);
                         break;
 
-                    case "/quit":
-                        _messageBuffer.Add(new TcpMessage
-                        {
-                            Type = MessageType.BYE,
-                            DisplayName = _user.DisplayName
-                        });
-                        EndCommunication();
-                        return;
-
                     default:
-                        if ((State != ClientState.auth && State != ClientState.join) && !WaitingForAuthReply && !WaitingForJoinReply)
-                        {
-                            Console.WriteLine("ERROR: You must be authenticated and joined before sending messages.\n");
-                            break;
-                        }
-
+           
                         var message = new TcpMessage
                         {
                             Type = MessageType.MSG,
-                            DisplayName = _user.DisplayName,
                             Content = input
                         };
 
@@ -249,10 +232,11 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
     }
 
 
-     private async Task SendBufferedMessagesAsync()
+    private async Task SendBufferedMessagesAsync()
     {
         while (!_token.IsCancellationRequested)
         {
+
             if (_messageBuffer.IsEmpty)
             {
                 await Task.Delay(100);
@@ -262,26 +246,18 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
             var message = _messageBuffer.Peek();
             if (message == null)
             {
-                await Task.Delay(50);
+                await Task.Delay(100);
                 continue;
             }
 
-            if (!message.IsValid(out var error))
+            string error = string.Empty;
+            bool allowedToSend = message.Type switch
             {
-                Console.Write(error);
-                _messageBuffer.TryGet(out _);
-                continue;
-            }
-
-            bool allowedToSend = false;
-            if (message.Type == MessageType.AUTH && State == ClientState.start)
-                allowedToSend = true;
-            else if (message.Type == MessageType.JOIN && (State == ClientState.auth || State == ClientState.join))
-                allowedToSend = true;
-            else if (message.Type == MessageType.MSG && (State == ClientState.auth || State == ClientState.join))
-                allowedToSend = true;
-            else if (message.Type == MessageType.BYE)
-                allowedToSend = true;
+                MessageType.AUTH => State == ClientState.auth || State == ClientState.start,
+                MessageType.JOIN => State == ClientState.open,
+                MessageType.MSG => !WaitingForAuthReply && !WaitingForJoinReply,
+                _ => true
+            };
 
             if (!allowedToSend)
             {
@@ -290,10 +266,91 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
             }
             try
             {
-                await _writer!.WriteLineAsync(message.Serialize());
-                _logger.LogDebug("Sent message of type: {type}", message.Type);
+                switch(message.Type){
+                    case MessageType.BYE:
+                        message.SetDisplayName(_user.DisplayName);
+                        var byeSerialized = message.Serialize(out error);
+                        if (!string.IsNullOrEmpty(error))
+                        {
+                            Console.WriteLine(error);
+                            _messageBuffer.TryGet(out _);
+                            break;
+                        }
 
-                _messageBuffer.TryGet(out _);
+                        await _writer!.WriteLineAsync(byeSerialized);
+                        _logger.LogInformation("Sent BYE to server.");
+                        _messageBuffer.TryGet(out _);
+                        EndCommunication();
+                        return;
+
+                    case MessageType.JOIN:
+                        if (!_user.isAuthenticated)
+                        {
+                            Console.WriteLine("ERROR: You must be authenticated before joining a channel.\n");
+                            _messageBuffer.TryGet(out _);
+                            break;
+                        }
+                        message.SetDisplayName(_user.DisplayName);
+                        var joinSerialized = message.Serialize(out error);
+                        if (!string.IsNullOrEmpty(error))
+                        {
+                            Console.WriteLine(error);
+                            _messageBuffer.TryGet(out _);
+                            break;
+                        }
+                        await _writer!.WriteLineAsync(joinSerialized);
+                        _messageBuffer.TryGet(out _);
+                        State = ClientState.join;
+                        WaitingForJoinReply = true;
+                        break;
+                    case MessageType.AUTH:
+                       if(_user.isAuthenticated){
+                            Console.WriteLine("ERROR: Already authenticated.");
+                            _messageBuffer.TryGet(out _);
+                            break;
+                        }
+                        
+                        if (!_user.SetUsername(message.MessageArgs[0], out error) ||
+                            !_user.SetSecret(message.MessageArgs[1], out error) ||
+                            !_user.SetDisplayName(message.MessageArgs[2], out error))
+                        {
+                            Console.WriteLine(error);
+                            _messageBuffer.TryGet(out _);
+                            break;
+                        }
+                        var authSerialized = message.Serialize(out error);
+                        if (!string.IsNullOrEmpty(error))
+                        {
+                            Console.WriteLine(error);
+                            _messageBuffer.TryGet(out _);
+                            break;
+                        }
+                        await _writer!.WriteLineAsync(authSerialized);
+                        _messageBuffer.TryGet(out _);
+                        State = ClientState.auth;
+                        WaitingForAuthReply = true;
+                        break;
+
+                   default:
+                        if (!_user.isAuthenticated)
+                        {
+                            Console.WriteLine("ERROR: You must be authenticated before sending messages.\n");
+                            _messageBuffer.TryGet(out _);
+                            break;
+                        }
+                    
+                        message.SetDisplayName(_user.DisplayName);
+                        var msgSerialized = message.Serialize(out error);
+                        if (!string.IsNullOrEmpty(error))
+                        {
+                            Console.WriteLine(error);
+                            _messageBuffer.TryGet(out _);
+                            break;
+                        }
+                        await _writer!.WriteLineAsync(msgSerialized);
+                        _messageBuffer.TryGet(out _);
+                        break;
+                }
             }
             catch (Exception ex)
             {
@@ -312,8 +369,17 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
                 DisplayName = _user.DisplayName
             };
 
-            _writer?.WriteLine(byeMessage.Serialize());
-            _logger.LogInformation("Sent BYE to server.");
+            var serializedMsg = byeMessage.Serialize(out var error);
+
+             if (!string.IsNullOrEmpty(error))
+            {
+                _logger.LogWarning("Failed to serialize BYE message: {Error}", error);
+            }
+            else
+            {
+                _writer?.WriteLine(serializedMsg);
+                _logger.LogInformation("Sent BYE to server.");
+            }
         }
         catch (Exception ex)
         {
@@ -321,6 +387,7 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
         }
         finally
         {
+            _cts.Cancel(); 
             EndCommunication();
         }
     }
@@ -336,8 +403,15 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
                 Content = reason
             };
 
-            _writer?.WriteLine(errMessage.Serialize());
-            _logger.LogWarning("Sent ERR to server with reason: {Reason}", reason);
+            var serializedMsg = errMessage.Serialize(out var error);
+            if (!string.IsNullOrEmpty(error))
+            {
+                _logger.LogWarning("Failed to serialize ERR message: {Error}", error);
+            }
+            else
+            {
+                _writer?.WriteLine(serializedMsg);
+            }
         }
         catch (Exception ex)
         {
@@ -345,6 +419,7 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
         }
         finally
         {
+            _cts.Cancel(); 
             EndCommunication();
         }
     }
@@ -355,5 +430,6 @@ public class TcpMessageClient(IPAddress serverIp, int port, CancellationToken to
         _reader?.Close();
         _tcpClient?.Close();
         _tcpClient?.Dispose();
+        Environment.Exit(0);
     }
 }

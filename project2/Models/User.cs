@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using project2.Utils;
 
 namespace project2.Models;
@@ -5,13 +6,21 @@ namespace project2.Models;
 public class User
 {
     public string Username { get; private set; } = "";
-    public string DisplayName { get; private set; } = "";
+    public string DisplayName { get; private set; } = "Unknown";
     public string Secret { get; private set; } = "";
     public bool isAuthenticated {get; private set;} = false;
 
+    private static readonly Regex UsernameRegex = new(@"^[a-zA-Z0-9_-]{1,20}$");
+    private static readonly Regex DisplayNameRegex = new(@"^[\x21-\x7E]{1,20}$");
+    private static readonly Regex SecretRegex = new(@"^[a-zA-Z0-9_-]{1,128}$");
+
+    public void setIsAuthenticated(bool isAuth){
+        isAuthenticated = isAuth;
+    }
+
     public bool SetUsername(string username, out string error)
     {
-        if (!InputValidator.IsValidUsername(username))
+        if (string.IsNullOrWhiteSpace(username) || !IsValidUsername(username))
         {
             error = "ERROR: Invalid username.\n";
             return false;
@@ -22,13 +31,9 @@ public class User
         return true;
     }
 
-    public void setIsAuthenticated(bool isAuth){
-        isAuthenticated = isAuth;
-    }
-
     public bool SetDisplayName(string displayName, out string error)
     {
-        if (!InputValidator.IsValidDisplayName(displayName))
+        if (string.IsNullOrWhiteSpace(displayName) || !IsValidDisplayName(displayName))
         {
             error = "ERROR: Invalid display name.\n";
             return false;
@@ -51,4 +56,10 @@ public class User
         error = "";
         return true;
     }
+
+    private static bool IsValidUsername(string input) => UsernameRegex.IsMatch(input);
+
+    private static bool IsValidDisplayName(string input) => DisplayNameRegex.IsMatch(input);
+
+    private static bool IsValidSecret(string input) => SecretRegex.IsMatch(input);
 }
