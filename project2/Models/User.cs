@@ -7,6 +7,7 @@ public class User
     public string Username { get; private set; } = "";
     public string DisplayName { get; private set; } = "";
     public string Secret { get; private set; } = "";
+    public bool isAuthenticated {get; private set;} = false;
 
     public bool SetUsername(string username, out string error)
     {
@@ -19,6 +20,10 @@ public class User
         Username = username;
         error = "";
         return true;
+    }
+
+    public void setIsAuthenticated(bool isAuth){
+        isAuthenticated = isAuth;
     }
 
     public bool SetDisplayName(string displayName, out string error)

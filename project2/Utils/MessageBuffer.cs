@@ -17,9 +17,7 @@ public class MessageBuffer<T> where T : Message
         return _buffer.TryDequeue(out message);
     }
 
+        public T? Peek() => _buffer.TryPeek(out var result) ? result : null;
+
     public bool IsEmpty => _buffer.IsEmpty;
-
-    public int Count => _buffer.Count;
-
-    public IEnumerable<T> GetAll() => _buffer.ToArray();
 }

@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using project2.Models;
+using Microsoft.Extensions.Logging;
 
 internal static class Program
 {
@@ -57,16 +58,26 @@ internal static class Program
             }
         }
 
-        if (server == "" || protocol == "")
+        if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(protocol))
         {
-            Console.WriteLine("Shit went wrong D:");
+            Console.Error.WriteLine("ERROR: Server and protocol are required.");
             Environment.Exit(1);
         }
+
         IPAddress[] ipAddresses = Dns.GetHostAddresses(server);
         IPAddress serverIp = ipAddresses[0];
         
-        using var cts = new CancellationTokenSource();
+        var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddSimpleConsole(o =>
+            {
+                o.SingleLine = true;
+                o.TimestampFormat = "[HH:mm:ss] ";
+            });
+        });
+        var logger = loggerFactory.CreateLogger<TcpMessageClient>();
 
+        using var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (s, e) =>
         {
             e.Cancel = true;
@@ -75,7 +86,7 @@ internal static class Program
 
         if (protocol == "tcp")
         {
-            TcpMessageClient client = new TcpMessageClient(serverIp, port, cts.Token);
+            TcpMessageClient client = new TcpMessageClient(serverIp, port, cts.Token, logger);
             client.StartCommunication();
         }
     }
