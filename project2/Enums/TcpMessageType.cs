@@ -1,6 +1,6 @@
 namespace project2.Enums;
 
-public enum MessageType
+public enum TcpMessageType
 {
     AUTH,
     JOIN,
@@ -8,8 +8,6 @@ public enum MessageType
     ERR,
     REPLY,
     BYE,
-    PING,
-    CONFIRM,
     RENAME,
     UNKNOWN 
 }

@@ -71,12 +71,21 @@ internal static class Program
                 o.TimestampFormat = "[HH:mm:ss] ";
             });
         });
-        var logger = loggerFactory.CreateLogger<TcpMessageClient>();
 
         if (protocol == "tcp")
         {
+            var logger = loggerFactory.CreateLogger<TcpMessageClient>();
             TcpMessageClient client = new TcpMessageClient(server, port, logger);
             client.StartCommunication();
+        }else if(protocol == "udp"){
+            var logger = loggerFactory.CreateLogger<UdpMessageClient>();
+            UdpMessageClient client = new UdpMessageClient(server, port, logger);
+            client.StartCommunication();
+        }else{
+            Console.Error.WriteLine("ERROR: Invalid protocol provided");
+            Environment.Exit(1);
         }
+
+        Environment.Exit(0);
     }
 }

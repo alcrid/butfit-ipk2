@@ -5,7 +5,7 @@ namespace project2.Models;
 
 public class TcpMessage : Message
 {
-    public MessageType Type { get; set; }
+    public TcpMessageType Type { get; set; }
     public string Content { get; set; } = string.Empty;
     public string[] MessageArgs { get; set; } = Array.Empty<string>();
     public string DisplayName { get; set; } = "Unknown";
@@ -23,7 +23,7 @@ public class TcpMessage : Message
 
         switch (Type)
         {
-            case MessageType.AUTH:
+            case TcpMessageType.AUTH:
                 if (MessageArgs.Length != 3)
                 {
                     error = "ERROR: Usage: /auth <username> <secret> <displayName>";
@@ -32,7 +32,7 @@ public class TcpMessage : Message
 
                 return $"AUTH {MessageArgs[0]} AS {MessageArgs[2]} USING {MessageArgs[1]}\r\n";
 
-            case MessageType.JOIN:
+            case TcpMessageType.JOIN:
                 if (MessageArgs.Length != 1)
                 {
                     error = "ERROR: usage: /join <channelid>";
@@ -45,7 +45,7 @@ public class TcpMessage : Message
 
                 return $"JOIN {MessageArgs[0]} AS {DisplayName}\r\n";
 
-            case MessageType.MSG:
+            case TcpMessageType.MSG:
                 if (Content.Length > 60000)
                 {
                     error = "ERROR: Message content too long and was truncated.";
@@ -54,7 +54,7 @@ public class TcpMessage : Message
 
                 return $"MSG FROM {DisplayName} IS {Content}\r\n";
                 
-            case MessageType.ERR:
+            case TcpMessageType.ERR:
                 if (string.IsNullOrWhiteSpace(Content))
                 {
                     error = "ERROR: Error message content cannot be empty.";
@@ -63,10 +63,10 @@ public class TcpMessage : Message
 
                 return $"ERR FROM {DisplayName} IS {Content}\r\n";
 
-            case MessageType.REPLY:
+            case TcpMessageType.REPLY:
                 return $"REPLY {Content}\r\n";
 
-            case MessageType.BYE:
+            case TcpMessageType.BYE:
                 return $"BYE FROM {DisplayName}\r\n";
 
             default:
