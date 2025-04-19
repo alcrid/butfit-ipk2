@@ -17,7 +17,7 @@ public class TcpMessage : Message
         DisplayName = displayName;
     }
 
-    public override string Serialize(out string error)
+    public string Serialize(out string error)
     {
         error = string.Empty;
 
@@ -55,12 +55,6 @@ public class TcpMessage : Message
                 return $"MSG FROM {DisplayName} IS {Content}\r\n";
                 
             case TcpMessageType.ERR:
-                if (string.IsNullOrWhiteSpace(Content))
-                {
-                    error = "ERROR: Error message content cannot be empty.";
-                    return string.Empty;
-                }
-
                 return $"ERR FROM {DisplayName} IS {Content}\r\n";
 
             case TcpMessageType.REPLY:

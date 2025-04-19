@@ -14,9 +14,14 @@ internal static class Program
             switch (args[i])
             {
                 case "-h":
-                    Console.WriteLine(
-                        "Usage: ./ipk-l4-scan [-i interface] [-t ports] [-u ports] [-w timeout] hostname/ip");
-                    return;
+                    Console.WriteLine("""
+                        /auth {Username} {Secret} {DisplayName}     Sends AUTH message with the data provided from the command to the server (and correctly handles the Reply message), locally sets the DisplayName value (same as the /rename command)
+                        /join {ChannelID}                          Sends JOIN message with channel name from the command to the server (and correctly handles the Reply message)
+                        /rename {DisplayName}                      Locally changes the display name of the user to be sent with new messages/selected commands
+                        /help                                      Prints out supported local commands with their parameters and a description
+                        """);
+                    Environment.Exit(0);
+                     return;
 
                 case "-t":
                     protocol = args[++i];

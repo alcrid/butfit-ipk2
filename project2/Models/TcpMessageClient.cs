@@ -56,7 +56,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
         }
         finally
         {
-            EndCommunication();
+            EndCommunication(0);
         }
     }
 
@@ -72,7 +72,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
 
                 if (read == 0)
                 {
-                    EndCommunication();
+                    EndCommunication(0);
                     break;
                 }
 
@@ -90,14 +90,14 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                         string displayName = words[2];
                         string errorContent = string.Join(' ', words.Skip(4));
                         Console.WriteLine($"ERROR FROM {displayName}: {errorContent}");
-                        EndCommunication();
+                        EndCommunication(1);
                         return;
                     }
                     else if (words.Length >= 3 && words[0].Equals("BYE", StringComparison.OrdinalIgnoreCase) && words[1].Equals("FROM", StringComparison.OrdinalIgnoreCase))
                     {
                         string displayName = words[2];
-                        Console.WriteLine($"BYE FROM {displayName}");
-                        EndCommunication();
+                        Console.Write($"BYE FROM {displayName}\r\n");
+                        EndCommunication(0);
                         return;
                     }
 
@@ -124,8 +124,8 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                             }
                             else
                             {
-                                _state = ClientState.end;
-                                SendErrAndEndCommunication("ERROR: Invalid response from server");
+                                Console.WriteLine("ERROR: Recieved invalid response from server");
+                                SendErrAndEndCommunication("Invalid response from server");
                             }
                             break;
 
@@ -133,8 +133,8 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                             if (line.StartsWith("REPLY IS OK ", StringComparison.OrdinalIgnoreCase) ||
                                 line.StartsWith("REPLY IS NOK ", StringComparison.OrdinalIgnoreCase))
                             {
-                                _state = ClientState.end;
-                                SendErrAndEndCommunication("ERROR: Received invalid message REPLY IS OK or NOK from server");
+                                Console.WriteLine("ERROR: Recieved invalid response from server");
+                                SendErrAndEndCommunication("Received invalid message REPLY IS OK or NOK from server");
                             }
                             else if (words.Length >= 4 &&
                                     words[0].Equals("MSG", StringComparison.OrdinalIgnoreCase) &&
@@ -147,7 +147,8 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                             }
                             else
                             {
-                                SendErrAndEndCommunication("ERROR: Malformed message received from server.");
+                                Console.WriteLine("ERROR: Malformed message recieved from server");
+                                SendErrAndEndCommunication("Malformed message received from server.");
                             }
                             break;
 
@@ -177,6 +178,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                             }
                             else
                             {
+                                Console.WriteLine("ERROR: Malformed message recieved from server");
                                 SendErrAndEndCommunication("ERROR: Malformed message received from server.");
                             }
                             break;
@@ -192,7 +194,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
         }
         catch (Exception ex)
         {
-            // logger.LogError(ex, "Receive error.");
+            Console.WriteLine($"ERROR: Recieved error {ex}");
         }
     }
 
@@ -204,12 +206,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
 
             if (input == null)
             {
-                _messageBuffer.Add(new TcpMessage
-                {
-                    Type = TcpMessageType.BYE,
-                    DisplayName = _user.DisplayName
-                });
-                break;
+                SendByeAndEndCommunication();
             }
 
             if (string.IsNullOrWhiteSpace(input))
@@ -237,11 +234,13 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                     break;
 
                 case "/rename":
-                    _messageBuffer.Add(new TcpMessage
+                    string error;
+                    _user.SetDisplayName(args[0], out error);
+                    if (!string.IsNullOrEmpty(error))
                     {
-                        Type = TcpMessageType.RENAME,
-                        MessageArgs = args
-                    });
+                        Console.WriteLine(error);
+                    }
+
                     break;
 
                 case "/help":
@@ -254,11 +253,17 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                     break;
 
                 default:
+                    if (command.StartsWith("/"))
+                    {
+                        Console.WriteLine($"ERROR: Invalid command '{command}'");
+                        break;
+                    }
 
                     var message = new TcpMessage
                     {
                         Type = TcpMessageType.MSG,
-                        Content = input
+                        Content = input,
+                        DisplayName = _user.DisplayName
                     };
 
                     _messageBuffer.Add(message);
@@ -273,14 +278,14 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
         {
             if (_messageBuffer.IsEmpty)
             {
-                await Task.Delay(100);
+                await Task.Delay(50);
                 continue;
             }
 
             var message = _messageBuffer.Peek();
             if (message == null)
             {
-                await Task.Delay(100);
+                await Task.Delay(50);
                 continue;
             }
 
@@ -293,34 +298,30 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
 
             if (!allowedToSend)
             {
-                await Task.Delay(100, _token);
+                await Task.Delay(50, _token);
                 continue;
             }
 
             try
             {
                 switch (message.Type)
-                {
+                {  
                     case TcpMessageType.BYE:
-                        message.SetDisplayName(_user.DisplayName);
                         var byeSerialized = message.Serialize(out error);
                         if (!string.IsNullOrEmpty(error))
                         {
                             Console.WriteLine(error);
-                            _messageBuffer.TryGet(out _);
                             break;
                         }
 
                         await _writer!.WriteAsync(byeSerialized);
-                        _messageBuffer.TryGet(out _);
-                        EndCommunication();
+                        EndCommunication(0);
                         return;
 
                     case TcpMessageType.JOIN:
                         if (!_user.isAuthenticated)
                         {
-                            Console.WriteLine("ERROR: You must be authenticated before joining a channel.\n");
-                            _messageBuffer.TryGet(out _);
+                            Console.WriteLine("ERROR: You must be authenticated before joining a channel.");
                             break;
                         }
 
@@ -329,12 +330,10 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                         if (!string.IsNullOrEmpty(error))
                         {
                             Console.WriteLine(error);
-                            _messageBuffer.TryGet(out _);
                             break;
                         }
 
                         await _writer!.WriteAsync(joinSerialized);
-                        _messageBuffer.TryGet(out _);
                         _state = ClientState.join;
                         WaitingForJoinReply = true;
                         break;
@@ -342,23 +341,18 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                         if (_user.isAuthenticated)
                         {
                             Console.WriteLine("ERROR: Already authenticated");
-                            _messageBuffer.TryGet(out _);
                             break;
                         }
-
-                        if (message.MessageArgs.Length != 3)
+                        else if (message.MessageArgs.Length != 3)
                         {
                             Console.WriteLine("ERROR: Usage: /auth <username> <secret> <displayName>");
-                            _messageBuffer.TryGet(out _);
                             break;
                         }
-
-                        if (!_user.SetUsername(message.MessageArgs[0], out error) ||
+                        else if (!_user.SetUsername(message.MessageArgs[0], out error) ||
                             !_user.SetSecret(message.MessageArgs[1], out error) ||
                             !_user.SetDisplayName(message.MessageArgs[2], out error))
                         {
                             Console.WriteLine(error);
-                            _messageBuffer.TryGet(out _);
                             break;
                         }
 
@@ -366,93 +360,42 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                         if (!string.IsNullOrEmpty(error))
                         {
                             Console.WriteLine(error);
-                            _messageBuffer.TryGet(out _);
                             break;
                         }
 
                         await _writer!.WriteAsync(authSerialized);
-                        _messageBuffer.TryGet(out _);
                         _state = ClientState.auth;
                         WaitingForAuthReply = true;
-                        break;
-                    case TcpMessageType.RENAME:
-                        if (message.MessageArgs.Length != 1)
-                        {
-                            Console.WriteLine("ERROR: Usage: /rename {DisplayName}");
-                            _messageBuffer.TryGet(out _);
-                            break;
-                        }
-                        if (!_user.SetDisplayName(message.MessageArgs[0], out error))
-                        {
-                            Console.WriteLine(error);
-                            _messageBuffer.TryGet(out _);
-                        }
-                        break;
+                        break;               
 
-                    default:
+                    case TcpMessageType.MSG:
                         if (!_user.isAuthenticated)
                         {
-                            Console.WriteLine("ERROR: You must be authenticated before sending messages.\n");
-                            _messageBuffer.TryGet(out _);
+                            Console.WriteLine("ERROR: You must be authenticated before sending messages.");
                             break;
                         }
-                        if(message.Content.StartsWith("/")){
-                             Console.WriteLine("ERROR: Invalid command send.");
-                            _messageBuffer.TryGet(out _);
+                        else if (_state != ClientState.open)
+                        {
+                            Console.WriteLine("ERROR: cannot send message.");
                             break;
                         }
 
-                        message.SetDisplayName(_user.DisplayName);
                         var msgSerialized = message.Serialize(out error);
                         if (!string.IsNullOrEmpty(error))
                         {
                             Console.WriteLine(error);
-                            _messageBuffer.TryGet(out _);
                             break;
                         }
-
                         await _writer!.WriteAsync(msgSerialized);
-                    _messageBuffer.TryGet(out _);
                         break;
+
                 }
+                _messageBuffer.TryGet(out _);
             }
             catch (Exception ex)
             {
-                // logger.LogError(ex, "Failed to send message.");
+                logger.LogError(ex, "Failed to send message.");
             }
-        }
-    }
-
-    private void SendByeAndEndCommunication()
-    {
-        try
-        {
-            var byeMessage = new TcpMessage
-            {
-                Type = TcpMessageType.BYE,
-                DisplayName = _user.DisplayName
-            };
-
-            var serializedMsg = byeMessage.Serialize(out var error);
-
-            if (!string.IsNullOrEmpty(error))
-            {
-                // logger.LogWarning("Failed to serialize BYE message: {Error}", error);
-            }
-            else
-            {
-                _writer?.WriteLine(serializedMsg);
-                // logger.LogInformation("Sent BYE to server.");
-            }
-        }
-        catch (Exception ex)
-        {
-            // logger.LogError(ex, "Failed to send BYE message.");
-        }
-        finally
-        {
-            _cts.Cancel();
-            EndCommunication();
         }
     }
 
@@ -468,33 +411,47 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
             };
 
             var serializedMsg = errMessage.Serialize(out var error);
-            if (!string.IsNullOrEmpty(error))
-            {
-                // logger.LogInformation("Failed to serialize ERR message: {Error}", error);
-            }
-            else
-            {
-                _writer?.WriteLine(serializedMsg);
-                // logger.LogInformation("Invalid reply from server");
-            }
+            _writer?.Write(serializedMsg);
         }
         catch (Exception ex)
         {
-            // logger.LogError(ex, "Failed to send ERR message.");
+            logger.LogError(ex, "Failed to send ERR message.");
         }
         finally
         {
-            _cts.Cancel();
-            EndCommunication();
+            EndCommunication(1);
         }
     }
-
-    private void EndCommunication()
+ 
+    private void SendByeAndEndCommunication()
     {
+        try
+        {
+            var errMessage = new TcpMessage
+            {
+                Type = TcpMessageType.BYE,
+                DisplayName = _user.DisplayName,
+            };
+
+            var serializedMsg = errMessage.Serialize(out var error);
+            _writer?.Write(serializedMsg);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send ERR message.");
+        }
+        finally
+        {
+            EndCommunication(0);
+        }
+    }
+    private void EndCommunication(int errorCode)
+    {
+        _cts.Cancel();
         _writer?.Close();
         _reader?.Close();
         _tcpClient?.Close();
         _tcpClient?.Dispose();
-        Environment.Exit(0);
+        Environment.Exit(errorCode);
     }
 }

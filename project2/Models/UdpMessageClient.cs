@@ -430,14 +430,12 @@ public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient>
                     if (_user.isAuthenticated)
                     {
                         Console.WriteLine("ERROR: Already authenticated");
-                        _messageBuffer.TryGet(out _);
                         break;
                     }
 
                     if (message.MessageArgs.Length != 3)
                     {
                         Console.WriteLine("ERROR: Usage: /auth <username> <secret> <displayName>");
-                        _messageBuffer.TryGet(out _);
                         break;
                     }
 
@@ -446,7 +444,6 @@ public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient>
                         !_user.SetDisplayName(message.MessageArgs[2], out error))
                     {
                         Console.WriteLine(error);
-                        _messageBuffer.TryGet(out _);
                         break;
                     }
 
@@ -456,22 +453,30 @@ public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient>
 
                     if (!await SendUdpMessage(message))
                     {
-                        _messageBuffer.TryGet(out _);
                         break;
                     }
                     break;
 
-                case UdpMessageType.MSG:
+                case UdpMessageType.MSG: 
+                    if (!_user.isAuthenticated)
+                    {
+                        Console.WriteLine("ERROR: You must be authenticated before sending messages.\n");
+                        break;
+                    } 
+                    if (_state != ClientState.open)
+                    {
+                        Console.WriteLine("ERROR: cannot send message ");
+                        break;
+                    }
+
                     logger.LogInformation("sending msg");
                     await SendUdpMessage(message);
-                    _messageBuffer.TryGet(out _);
                     break;
 
                 case UdpMessageType.JOIN:
                     if (!_user.isAuthenticated)
                     {
                         Console.WriteLine("ERROR: You must be authenticated before joining a channel.\n");
-                        _messageBuffer.TryGet(out _);
                         break;
                     }
 
@@ -495,7 +500,6 @@ public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient>
                     EndCommunication(1);
                     break;
             }
-
 
             _messageBuffer.TryGet(out _);
         }

@@ -8,6 +8,5 @@ public enum TcpMessageType
     ERR,
     REPLY,
     BYE,
-    RENAME,
     UNKNOWN 
 }
