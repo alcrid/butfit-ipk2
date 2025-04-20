@@ -2,11 +2,12 @@ using System.Net;
 using System.Net.Sockets;
 using project2.Enums;
 using project2.Utils;
+using project2.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace project2.Models;
 
-public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient> logger)
+public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient> logger) : IMessageClient
 {
     private TcpClient? _tcpClient;
     private StreamReader? _reader;
@@ -96,7 +97,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                     else if (words.Length >= 3 && words[0].Equals("BYE", StringComparison.OrdinalIgnoreCase) && words[1].Equals("FROM", StringComparison.OrdinalIgnoreCase))
                     {
                         string displayName = words[2];
-                        Console.Write($"BYE FROM {displayName}\r\n");
+                        Console.WriteLine($"BYE FROM {displayName}");
                         EndCommunication(0);
                         return;
                     }
@@ -207,6 +208,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
             if (input == null)
             {
                 SendByeAndEndCommunication();
+                break;
             }
 
             if (string.IsNullOrWhiteSpace(input))
@@ -272,24 +274,22 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
         }
     }
 
+    // sends the messages stored in the buffer
     private async Task SendBufferedMessagesAsync()
     {
         while (!_token.IsCancellationRequested)
         {
+            // checks if any message are in the buffer
             if (_messageBuffer.IsEmpty)
             {
-                await Task.Delay(50);
+                await Task.Delay(100);
                 continue;
             }
 
             var message = _messageBuffer.Peek();
-            if (message == null)
-            {
-                await Task.Delay(50);
-                continue;
-            }
-
             string error;
+
+            // checks if is allowed to send messages and isn't waiting for a reply
             bool allowedToSend = message.Type switch
             {
                 TcpMessageType.MSG => !WaitingForAuthReply && !WaitingForJoinReply,
@@ -306,38 +306,8 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
             {
                 switch (message.Type)
                 {  
-                    case TcpMessageType.BYE:
-                        var byeSerialized = message.Serialize(out error);
-                        if (!string.IsNullOrEmpty(error))
-                        {
-                            Console.WriteLine(error);
-                            break;
-                        }
-
-                        await _writer!.WriteAsync(byeSerialized);
-                        EndCommunication(0);
-                        return;
-
-                    case TcpMessageType.JOIN:
-                        if (!_user.isAuthenticated)
-                        {
-                            Console.WriteLine("ERROR: You must be authenticated before joining a channel.");
-                            break;
-                        }
-
-                        message.SetDisplayName(_user.DisplayName);
-                        var joinSerialized = message.Serialize(out error);
-                        if (!string.IsNullOrEmpty(error))
-                        {
-                            Console.WriteLine(error);
-                            break;
-                        }
-
-                        await _writer!.WriteAsync(joinSerialized);
-                        _state = ClientState.join;
-                        WaitingForJoinReply = true;
-                        break;
                     case TcpMessageType.AUTH:
+                        // Checks if arguments passed to message are correct
                         if (_user.isAuthenticated)
                         {
                             Console.WriteLine("ERROR: Already authenticated");
@@ -366,7 +336,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                         await _writer!.WriteAsync(authSerialized);
                         _state = ClientState.auth;
                         WaitingForAuthReply = true;
-                        break;               
+                        break;    
 
                     case TcpMessageType.MSG:
                         if (!_user.isAuthenticated)
@@ -388,6 +358,38 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                         }
                         await _writer!.WriteAsync(msgSerialized);
                         break;
+
+                    case TcpMessageType.JOIN:
+                        if (!_user.isAuthenticated)
+                        {
+                            Console.WriteLine("ERROR: You must be authenticated before joining a channel.");
+                            break;
+                        }
+
+                        message.SetDisplayName(_user.DisplayName);
+                        var joinSerialized = message.Serialize(out error);
+                        if (!string.IsNullOrEmpty(error))
+                        {
+                            Console.WriteLine(error);
+                            break;
+                        }
+
+                        await _writer!.WriteAsync(joinSerialized);
+                        _state = ClientState.join;
+                        WaitingForJoinReply = true;
+                        break;
+
+                    case TcpMessageType.BYE:
+                        var byeSerialized = message.Serialize(out error);
+                        if (!string.IsNullOrEmpty(error))
+                        {
+                            Console.WriteLine(error);
+                            break;
+                        }
+
+                        await _writer!.WriteAsync(byeSerialized);
+                        EndCommunication(0);
+                        return;
 
                 }
                 _messageBuffer.TryGet(out _);
@@ -435,7 +437,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
 
             var serializedMsg = errMessage.Serialize(out var error);
             _writer?.Write(serializedMsg);
-        }
+    }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to send ERR message.");

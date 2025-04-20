@@ -7,8 +7,9 @@ internal static class Program
     {
         string server = "";
         string protocol = "";
-        int port = 4567, timeout = 250, retransmissions = 3;
-
+        int port = 4567;
+        ushort timeout = 250;
+        int retransmissions = 250;
         for (int i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -34,16 +35,16 @@ internal static class Program
                 case "-p":
                     if (!int.TryParse(args[++i], out port))
                     {
-                        Console.Error.WriteLine("Invalid port value.");
+                        Console.Error.WriteLine("ERROR: Invalid port value.");
                         Environment.Exit(1);
                     }
 
                     break;
 
                 case "-d":
-                    if (!int.TryParse(args[++i], out timeout))
+                    if (!ushort.TryParse(args[++i], out timeout))
                     {
-                        Console.Error.WriteLine("Invalid UDP timeout value.");
+                        Console.Error.WriteLine("ERROR: Invalid UDP timeout value.");
                         Environment.Exit(1);
                     }
 
@@ -51,13 +52,14 @@ internal static class Program
                 case "r":
                     if (!int.TryParse(args[++i], out retransmissions))
                     {
-                        Console.Error.WriteLine("Invalid retransmittions value.");
+                        Console.Error.WriteLine("ERROR: Invalid retransmittions value.");
                         Environment.Exit(1);
                     }
 
                     break;
                 default:
-                    Console.WriteLine("Something bad happened D:");
+                    Console.WriteLine("ERROR: Invalid argument passed");
+                    Environment.Exit(1);
                     break;
             }
         }
@@ -84,7 +86,7 @@ internal static class Program
             client.StartCommunication();
         }else if(protocol == "udp"){
             var logger = loggerFactory.CreateLogger<UdpMessageClient>();
-            UdpMessageClient client = new UdpMessageClient(server, port, logger);
+            UdpMessageClient client = new UdpMessageClient(server, port, logger, retransmissions, timeout);
             client.StartCommunication();
         }else{
             Console.Error.WriteLine("ERROR: Invalid protocol provided");

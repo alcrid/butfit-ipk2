@@ -1,11 +1,12 @@
 using System.Collections.Concurrent;
 using project2.Models;
+using project2.Interfaces;
 
 namespace project2.Utils;
 
-public class MessageBuffer<T> where T : Message
+public class MessageBuffer<T> : IMessageBuffer<T> where T : Message
 {
-    private readonly ConcurrentQueue<T> _buffer = new();
+    private readonly Queue<T> _buffer = new();
 
     public void Add(T message)
     {
@@ -19,5 +20,5 @@ public class MessageBuffer<T> where T : Message
 
     public T? Peek() => _buffer.TryPeek(out var result) ? result : null;
 
-    public bool IsEmpty => _buffer.IsEmpty;
+    public bool IsEmpty => _buffer.Count == 0;
 }

@@ -4,11 +4,12 @@ using System.Security.Cryptography;
 using System.Text;
 using project2.Enums;
 using project2.Utils;
+using project2.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace project2.Models;
 
-public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient> logger)
+public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient> logger, int maxUdpRetransmissions, ushort udpConfirmationTimeout) : IMessageClient
 {
     private UdpClient? _udpClient;
     private readonly CancellationTokenSource _cts = new();
@@ -18,15 +19,15 @@ public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient>
     private ClientState _state;
     private bool WaitingForAuthReply;
     private bool WaitingForJoinReply;
+    private bool IsByeAlreadyRecieved = false;
+    private bool IsErrAlreadyRecieved = false;
     private int _pendingConfirmationId = -1;
     private ushort _currentMessageId;
     private IPEndPoint _remoteEndpoint = new(IPAddress.Any, 0);
     private bool _usingDinamicPort;
     private HashSet<ushort> _processedIds = new HashSet<ushort>();
-
-    //todo from console
-    private int _maxUdpRetransmissions = 3;
-    private ushort _udpConfirmationTimeout = 250;
+    private int _maxUdpRetransmissions = maxUdpRetransmissions;
+    private ushort _udpConfirmationTimeout = udpConfirmationTimeout;
 
 
     public void StartCommunication()
@@ -95,7 +96,7 @@ public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient>
                         SendConfirmationPacket((ushort)data["MessageID"]);
                         continue;
                     }
-                    //in reply can be changed remote ip so there is sending after
+                    // in reply can be changed remote ip so there is sending after
                     else if (messageType != UdpMessageType.REPLY)
                     {
                         _processedIds.Add((ushort)data["MessageID"]);
@@ -116,12 +117,10 @@ public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient>
                     case UdpMessageType.PING:
                         break;
                     case UdpMessageType.BYE:
-                        //todo wait if not another bye is send
                         EndCommunication(0);
                         break;
                     case UdpMessageType.ERR:
                         Console.WriteLine($"ERROR FROM {data["DisplayName"]}: {data["MessageContents"]}");
-                        // todo wait if another bye is sent
                         EndCommunication(1);
                         break;
                     case UdpMessageType.CONFIRM:
@@ -139,13 +138,7 @@ public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient>
 
                         break;
                     default:
-                        Console.WriteLine("ERROR: recieved invalid packet");
-                        _messageBuffer.Add(new UdpMessage()
-                        {
-                            Type = UdpMessageType.ERR,
-                            DisplayName = _user.DisplayName,
-                            MessageArgs = ["Invalid message"]
-                        });
+                        SendErrAndEndCommunication("ERROR: Recieved invalid packet");
                         break;
                 }
             }
@@ -160,8 +153,7 @@ public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient>
     {
         if (_state == ClientState.start || _state == ClientState.auth)
         {
-            Console.WriteLine("ERROR: received msg when not authenticated");
-            // todo senderr   
+            SendErrAndEndCommunication("ERROR: recieved message in wrong state");  
         }
 
         var message = Deserialize(packet);
@@ -212,7 +204,6 @@ public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient>
         confirmMessage.DisplayName = _user.DisplayName;
         confirmMessage.Type = UdpMessageType.CONFIRM;
 
-
         string error;
 
         var confirmPacket = confirmMessage.Serialize(out error, confirmingId);
@@ -242,12 +233,10 @@ public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient>
                     Type = UdpMessageType.BYE,
                     DisplayName = _user.DisplayName
                 });
-                break; //todo remove - wtf brak was breaking it xd
+                break;
             }
 
-            if (string.IsNullOrWhiteSpace(input))
-                continue;
-
+            // segment user input into parts and parse
             var parts = input.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
             var command = parts[0].ToLower();
             var args = parts.Skip(1).ToArray();
@@ -307,7 +296,7 @@ public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient>
 
         while (true)
         {
-            //wait until all things are close
+            //wait until all things are closed
             Thread.Sleep(100);
         }
     }
@@ -398,6 +387,7 @@ public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient>
         return Encoding.UTF8.GetString(bytes.ToArray());
     }
 
+    // Sends the messages stored in the buffer
     private async Task SendBufferedMessagesAsync()
     {
         while (!_token.IsCancellationRequested)
@@ -551,17 +541,39 @@ public class UdpMessageClient(string server, int port, ILogger<UdpMessageClient>
 
         if (!confirmed && retransmissionCount > _maxUdpRetransmissions)
         {
-            //todo return err
-            logger.LogInformation("yes it is from here");
             Console.WriteLine(
                 $"ERROR: UDP message {_currentMessageId} failed after {_maxUdpRetransmissions} retransmission attempts");
-            _pendingConfirmationId = -1; // Reset pending confirmation
+            _pendingConfirmationId = -1;
             _currentMessageId++;
+            EndCommunication(1);
             return false;
         }
 
         _currentMessageId++;
         return true;
+    }
+
+    private async void SendErrAndEndCommunication(string reason){
+        try
+        {
+            var errorMessage = new UdpMessage()
+            {
+                Type = UdpMessageType.ERR,
+                DisplayName = _user.DisplayName,
+                MessageArgs = ["Invalid message"]
+            };
+            
+            Console.WriteLine(reason);
+            await SendUdpMessage(errorMessage);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send ERR message.");
+        }
+        finally
+        {
+            EndCommunication(1);
+        }
     }
 
     private void EndCommunication(int errorCode)

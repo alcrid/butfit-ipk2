@@ -38,10 +38,10 @@ public class TcpMessage : Message
                     error = "ERROR: usage: /join <channelid>";
                     return string.Empty;
                 }
-                else if(!IsChannelIdValid(MessageArgs[0])){
-                    error = "ERROR: Invalid channelId provided";
-                    return string.Empty;
-                }
+                // else if(!IsChannelIdValid(MessageArgs[0])){
+                //     error = "ERROR: Invalid channelId provided";
+                //     return string.Empty;
+                // }
 
                 return $"JOIN {MessageArgs[0]} AS {DisplayName}\r\n";
 
