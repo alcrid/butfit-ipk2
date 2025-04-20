@@ -13,18 +13,17 @@
    &nbsp;&nbsp;2.2 [UDP Message Protocol](#udp-message-protocol)  
 3. [ABNF (Augmented Backus–Naur Form)](#abnf-augmented-backusnaur-form)  
 4. [Code Implementation](#code-implementation)  
-   &nbsp;&nbsp;4.1 [Class Diagram](#class-diagram)  
-   &nbsp;&nbsp;4.2 [TcmMessageClient.cs](#tcmmessageclientcs)  
-   &nbsp;&nbsp;&nbsp;&nbsp;4.2.1 [ProcessUserInput](#processuserinput)  
-   &nbsp;&nbsp;&nbsp;&nbsp;4.2.2 [Sending Messages](#sending-messages)  
-   &nbsp;&nbsp;4.3 [TcpMessage.cs](#tcpmessagecs)  
-   &nbsp;&nbsp;4.4 [UdpMessageClient.cs](#udpmessageclientcs)  
-   &nbsp;&nbsp;&nbsp;&nbsp;4.4.1 [SendUdpMessage](#sendudpmessage)  
-   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1.1 [Message Sending](#message-sending)  
-   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1.2 [Retransmission & Confirmation](#retransmission--confirmation)  
-   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1.3 [Deserialize](#deserialize)  
-   &nbsp;&nbsp;4.5 [UdpMessage.cs](#udpmessagecs)  
-   &nbsp;&nbsp;4.6 [MessageBuffer.cs](#messagebuffercs)  
+   &nbsp;&nbsp;4.1 [TcmMessageClient.cs](#tcmmessageclientcs)  
+   &nbsp;&nbsp;&nbsp;&nbsp;4.1.1 [ProcessUserInput](#processuserinput)  
+   &nbsp;&nbsp;&nbsp;&nbsp;4.1.2 [Sending Messages](#sending-messages)  
+   &nbsp;&nbsp;4.2 [TcpMessage.cs](#tcpmessagecs)  
+   &nbsp;&nbsp;4.3 [UdpMessageClient.cs](#udpmessageclientcs)  
+   &nbsp;&nbsp;&nbsp;&nbsp;4.3.1 [SendUdpMessage](#sendudpmessage)  
+   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.3.1.1 [Message Sending](#message-sending)  
+   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.3.1.2 [Retransmission & Confirmation](#retransmission--confirmation)  
+   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.3.1.3 [Deserialize](#deserialize)  
+   &nbsp;&nbsp;4.4 [UdpMessage.cs](#udpmessagecs)  
+   &nbsp;&nbsp;4.5 [MessageBuffer.cs](#messagebuffercs)  
 5. [Testing](#testing)  
    &nbsp;&nbsp;5.1 [TCP Testing](#tcp-testing)  
    &nbsp;&nbsp;&nbsp;&nbsp;5.1.1 [Discord Server Testing](#discord-server-testing)  
@@ -76,9 +75,6 @@ It is widely used in **internet protocol specifications**.
 In this project, ABNF was used to formally define the structure of **TCP protocol messages**.
 
 ## Code Implementation
-
-### class diagram 
-![Class diagram image](images/class_diagram.png)
 
 ### TcmMessageClient.cs
 
