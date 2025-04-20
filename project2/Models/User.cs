@@ -5,6 +5,7 @@ namespace project2.Models;
 public class User
 {
     public string Username { get; private set; } = "";
+    // default displayName set to Unknown
     public string DisplayName { get; private set; } = "Unknown";
     public string Secret { get; private set; } = "";
     public bool IsAuthenticated { get; private set; }

@@ -14,35 +14,35 @@ public class UdpMessage : Message
     {
         switch (Type)
         {
-            case UdpMessageType.AUTH:
+            case UdpMessageType.Auth:
                 return CreateAuthMessage(
                     messageId: messageId,
                     username: MessageArgs[0],
                     secret: MessageArgs[1],
                     displayName: MessageArgs[2]
                 );
-            case UdpMessageType.CONFIRM:
+            case UdpMessageType.Confirm:
                 return CreateConfirmMessage(
                     refMessageId: messageId
                 );
-            case UdpMessageType.MSG:
+            case UdpMessageType.Msg:
                 return CreateMsgMessage(
                     messageId: messageId,
                     displayName: DisplayName,
                     messageContent: MessageArgs[0]
                 );
-            case UdpMessageType.BYE:
+            case UdpMessageType.Bye:
                 return CreateByeMessage(
                     messageId: messageId,
                     displayName: DisplayName
                 );
-            case UdpMessageType.JOIN:
+            case UdpMessageType.Join:
                 return CreateJoinMessage(
                     messageId: messageId,
                     channelId: MessageArgs[0],
                     displayName: DisplayName
                 );
-            case UdpMessageType.ERR:
+            case UdpMessageType.Err:
                 return CreateErrMessage(
                     messageId: messageId,
                     errorMessage: MessageArgs[0],

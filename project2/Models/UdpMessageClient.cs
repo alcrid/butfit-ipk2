@@ -43,7 +43,7 @@ public class UdpMessageClient(
                 e.Cancel = true;
                 _messageBuffer.Add(new UdpMessage()
                 {
-                    Type = UdpMessageType.BYE,
+                    Type = UdpMessageType.Bye,
                     DisplayName = _user.DisplayName
                 });
                 logger.LogInformation("Ctrl+C detected — BYE message enqueued.");
@@ -62,7 +62,7 @@ public class UdpMessageClient(
             _remoteEndpoint = new IPEndPoint(ipAddress, port);
             _udpClient = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
 
-            _state = ClientState.start;
+            _state = ClientState.Start;
 
             _ = Task.Run(ReceiveMessagesAsync, _token);
             _ = Task.Run(SendBufferedMessagesAsync, _token);
@@ -98,7 +98,7 @@ public class UdpMessageClient(
                         continue;
                     }
                     // in reply can be changed remote ip so there is sending after
-                    else if (messageType != UdpMessageType.REPLY)
+                    if (messageType != UdpMessageType.Reply)
                     {
                         _processedIds.Add((ushort)data["MessageID"]);
                         SendConfirmationPacket((ushort)data["MessageID"]);
@@ -107,24 +107,24 @@ public class UdpMessageClient(
 
                 switch (messageType)
                 {
-                    case UdpMessageType.REPLY:
+                    case UdpMessageType.Reply:
                         logger.LogInformation("getting reply");
                         ProcessReply(packet, result);
                         break;
-                    case UdpMessageType.MSG:
+                    case UdpMessageType.Msg:
                         logger.LogInformation("getting msg");
                         ProcessMsg(packet);
                         break;
-                    case UdpMessageType.PING:
+                    case UdpMessageType.Ping:
                         break;
-                    case UdpMessageType.BYE:
+                    case UdpMessageType.Bye:
                         EndCommunication(0);
                         break;
-                    case UdpMessageType.ERR:
+                    case UdpMessageType.Err:
                         Console.WriteLine($"ERROR FROM {data["DisplayName"]}: {data["MessageContents"]}");
                         EndCommunication(1);
                         break;
-                    case UdpMessageType.CONFIRM:
+                    case UdpMessageType.Confirm:
                         if (packet.Length != 3)
                         {
                             Console.WriteLine("ERROR: received malformed packet");
@@ -152,7 +152,7 @@ public class UdpMessageClient(
 
     private void ProcessMsg(byte[] packet)
     {
-        if (_state == ClientState.start || _state == ClientState.auth)
+        if (_state == ClientState.Start || _state == ClientState.Auth)
         {
             SendErrAndEndCommunication("ERROR: recieved message in wrong state");
         }
@@ -177,19 +177,19 @@ public class UdpMessageClient(
         if (resultByte == 1)
         {
             Console.WriteLine($"Action Success: {replyMessage["MessageContents"]}");
-            if (_state == ClientState.auth || _state == ClientState.start)
+            if (_state == ClientState.Auth || _state == ClientState.Start)
             {
                 _user.SetIsAuthenticated(true);
             }
 
-            _state = ClientState.open;
+            _state = ClientState.Open;
         }
         else
         {
             Console.WriteLine($"Action Failure: {replyMessage["MessageContents"]}");
-            if (_state == ClientState.join)
+            if (_state == ClientState.Join)
             {
-                _state = ClientState.open;
+                _state = ClientState.Open;
             }
         }
 
@@ -204,7 +204,7 @@ public class UdpMessageClient(
         logger.LogInformation("sending confirmation");
         var confirmMessage = new UdpMessage();
         confirmMessage.DisplayName = _user.DisplayName;
-        confirmMessage.Type = UdpMessageType.CONFIRM;
+        confirmMessage.Type = UdpMessageType.Confirm;
 
         var confirmPacket = confirmMessage.Serialize(confirmingId);
 
@@ -215,7 +215,7 @@ public class UdpMessageClient(
     {
         while (!_token.IsCancellationRequested)
         {
-            logger.LogInformation("status: " + _state.ToString());
+            logger.LogInformation("status: " + _state);
 
             string? input = Console.ReadLine();
 
@@ -224,11 +224,14 @@ public class UdpMessageClient(
                 logger.LogInformation("ctrl +d pressed");
                 _messageBuffer.Add(new UdpMessage()
                 {
-                    Type = UdpMessageType.BYE,
+                    Type = UdpMessageType.Bye,
                     DisplayName = _user.DisplayName
                 });
                 break;
             }
+
+            if (string.IsNullOrWhiteSpace(input))
+                continue;
 
             // segment user input into parts and parse
             var parts = input.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -239,14 +242,14 @@ public class UdpMessageClient(
                 case "/auth":
                     _messageBuffer.Add(new UdpMessage
                     {
-                        Type = UdpMessageType.AUTH,
+                        Type = UdpMessageType.Auth,
                         MessageArgs = args
                     });
                     break;
                 case "/join":
                     _messageBuffer.Add(new UdpMessage
                     {
-                        Type = UdpMessageType.JOIN,
+                        Type = UdpMessageType.Join,
                         MessageArgs = args,
                         DisplayName = _user.DisplayName
                     });
@@ -278,7 +281,7 @@ public class UdpMessageClient(
 
                     var message = new UdpMessage()
                     {
-                        Type = UdpMessageType.MSG,
+                        Type = UdpMessageType.Msg,
                         MessageArgs = [input],
                         DisplayName = _user.DisplayName
                     };
@@ -287,13 +290,13 @@ public class UdpMessageClient(
                     break;
             }
         }
-
-        // while (true)
-        // {
-        //     //wait until all things are closed
-        //     Thread.Sleep(100);
-        // }
-        //
+        
+        while (true)
+        {
+            //wait until all things are closed
+            Thread.Sleep(100);
+        }
+        
     }
 
     public Dictionary<string, object> Deserialize(byte[] data)
@@ -310,11 +313,11 @@ public class UdpMessageClient(
         logger.LogInformation($"type: {(UdpMessageType)typeByte}");
         switch ((UdpMessageType)typeByte)
         {
-            case UdpMessageType.CONFIRM:
+            case UdpMessageType.Confirm:
                 result["RefMessageID"] = ReadUInt16(reader);
                 break;
 
-            case UdpMessageType.REPLY:
+            case UdpMessageType.Reply:
                 messageId = ReadUInt16(reader);
                 result["MessageID"] = messageId;
                 result["Result"] = (int)reader.ReadByte();
@@ -322,7 +325,7 @@ public class UdpMessageClient(
                 result["MessageContents"] = ReadZeroTerminatedString(reader);
                 break;
 
-            case UdpMessageType.AUTH:
+            case UdpMessageType.Auth:
                 messageId = ReadUInt16(reader);
                 result["MessageID"] = messageId;
                 result["Username"] = ReadZeroTerminatedString(reader);
@@ -330,34 +333,34 @@ public class UdpMessageClient(
                 result["Secret"] = ReadZeroTerminatedString(reader);
                 break;
 
-            case UdpMessageType.JOIN:
+            case UdpMessageType.Join:
                 messageId = ReadUInt16(reader);
                 result["MessageID"] = messageId;
                 result["ChannelID"] = ReadZeroTerminatedString(reader);
                 result["DisplayName"] = ReadZeroTerminatedString(reader);
                 break;
 
-            case UdpMessageType.MSG:
+            case UdpMessageType.Msg:
                 messageId = ReadUInt16(reader);
                 result["MessageID"] = messageId;
                 result["DisplayName"] = ReadZeroTerminatedString(reader);
                 result["MessageContents"] = ReadZeroTerminatedString(reader);
                 break;
 
-            case UdpMessageType.ERR:
+            case UdpMessageType.Err:
                 messageId = ReadUInt16(reader);
                 result["MessageID"] = messageId;
                 result["DisplayName"] = ReadZeroTerminatedString(reader);
                 result["MessageContents"] = ReadZeroTerminatedString(reader);
                 break;
 
-            case UdpMessageType.BYE:
+            case UdpMessageType.Bye:
                 messageId = ReadUInt16(reader);
                 result["MessageID"] = messageId;
                 result["DisplayName"] = ReadZeroTerminatedString(reader);
                 break;
 
-            case UdpMessageType.PING:
+            case UdpMessageType.Ping:
                 result["MessageID"] = ReadUInt16(reader);
                 break;
 
@@ -397,7 +400,7 @@ public class UdpMessageClient(
 
             bool allowedToSend = message != null && message.Type switch
             {
-                UdpMessageType.MSG => !_waitingForAuthReply && !_waitingForJoinReply,
+                UdpMessageType.Msg => !_waitingForAuthReply && !_waitingForJoinReply,
                 _ => true
             };
 
@@ -411,7 +414,7 @@ public class UdpMessageClient(
             if (message != null)
                 switch (message.Type)
                 {
-                    case UdpMessageType.AUTH:
+                    case UdpMessageType.Auth:
                         if (_user.IsAuthenticated)
                         {
                             Console.WriteLine("ERROR: Already authenticated");
@@ -432,20 +435,20 @@ public class UdpMessageClient(
                             break;
                         }
 
-                        _state = ClientState.auth;
+                        _state = ClientState.Auth;
                         _messageBuffer.TryGet(out _);
                         _waitingForAuthReply = true;
                         await SendUdpMessage(message);
                         break;
 
-                    case UdpMessageType.MSG:
+                    case UdpMessageType.Msg:
                         if (!_user.IsAuthenticated)
                         {
                             Console.WriteLine("ERROR: You must be authenticated before sending messages.\n");
                             break;
                         }
 
-                        if (_state != ClientState.open)
+                        if (_state != ClientState.Open)
                         {
                             Console.WriteLine("ERROR: cannot send message ");
                             break;
@@ -455,27 +458,27 @@ public class UdpMessageClient(
                         await SendUdpMessage(message);
                         break;
 
-                    case UdpMessageType.JOIN:
+                    case UdpMessageType.Join:
                         if (!_user.IsAuthenticated)
                         {
                             Console.WriteLine("ERROR: You must be authenticated before joining a channel.\n");
                             break;
                         }
 
-                        _state = ClientState.join;
+                        _state = ClientState.Join;
                         _waitingForJoinReply = true;
 
                         logger.LogInformation("sending msg");
                         await SendUdpMessage(message);
                         break;
 
-                    case UdpMessageType.BYE:
+                    case UdpMessageType.Bye:
                         logger.LogInformation("sending bye");
                         await SendUdpMessage(message);
 
                         EndCommunication(0);
                         break;
-                    case UdpMessageType.ERR:
+                    case UdpMessageType.Err:
                         logger.LogInformation("sending err");
                         await SendUdpMessage(message);
 
@@ -492,7 +495,8 @@ public class UdpMessageClient(
         _pendingConfirmationId = _currentMessageId;
 
         var packet = message.Serialize(_currentMessageId);
-
+        
+        logger.LogInformation("packet sent");
         int retransmissionCount = 0;
         bool confirmed = false;
 
@@ -542,7 +546,7 @@ public class UdpMessageClient(
         {
             var errorMessage = new UdpMessage()
             {
-                Type = UdpMessageType.ERR,
+                Type = UdpMessageType.Err,
                 DisplayName = _user.DisplayName,
                 MessageArgs = ["Invalid message"]
             };

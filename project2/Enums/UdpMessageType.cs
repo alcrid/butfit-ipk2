@@ -2,12 +2,12 @@ namespace project2.Enums;
 
 public enum UdpMessageType : byte
 {
-    CONFIRM = 0x00,
-    REPLY   = 0x01,
-    AUTH    = 0x02,
-    JOIN    = 0x03,
-    MSG     = 0x04,
-    PING    = 0xFD,
-    ERR     = 0xFE,
-    BYE     = 0xFF
+    Confirm = 0x00,
+    Reply   = 0x01,
+    Auth    = 0x02,
+    Join    = 0x03,
+    Msg     = 0x04,
+    Ping    = 0xFD,
+    Err     = 0xFE,
+    Bye     = 0xFF
 }

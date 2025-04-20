@@ -17,13 +17,14 @@ public class TcpMessage : Message
         DisplayName = displayName;
     }
 
+    // Serializes the message and if an error occurs sets it
     public string Serialize(out string error)
     {
         error = string.Empty;
 
         switch (Type)
         {
-            case TcpMessageType.AUTH:
+            case TcpMessageType.Auth:
                 if (MessageArgs.Length != 3)
                 {
                     error = "ERROR: Usage: /auth <username> <secret> <displayName>";
@@ -32,20 +33,20 @@ public class TcpMessage : Message
 
                 return $"AUTH {MessageArgs[0]} AS {MessageArgs[2]} USING {MessageArgs[1]}\r\n";
 
-            case TcpMessageType.JOIN:
+            case TcpMessageType.Join:
                 if (MessageArgs.Length != 1)
                 {
                     error = "ERROR: usage: /join <channelid>";
                     return string.Empty;
                 }
-                // if(!IsChannelIdValid(MessageArgs[0])){
-                //     error = "ERROR: Invalid channelId provided";
-                //     return string.Empty;
-                // }
+                if(!IsChannelIdValid(MessageArgs[0])){
+                    error = "ERROR: Invalid channelId provided";
+                    return string.Empty;
+                }
 
                 return $"JOIN {MessageArgs[0]} AS {DisplayName}\r\n";
 
-            case TcpMessageType.MSG:
+            case TcpMessageType.Msg:
                 if (Content.Length > 60000)
                 {
                     error = "ERROR: Message content too long and was truncated.";
@@ -54,13 +55,13 @@ public class TcpMessage : Message
 
                 return $"MSG FROM {DisplayName} IS {Content}\r\n";
 
-            case TcpMessageType.ERR:
+            case TcpMessageType.Err:
                 return $"ERR FROM {DisplayName} IS {Content}\r\n";
 
-            case TcpMessageType.REPLY:
+            case TcpMessageType.Reply:
                 return $"REPLY {Content}\r\n";
 
-            case TcpMessageType.BYE:
+            case TcpMessageType.Bye:
                 return $"BYE FROM {DisplayName}\r\n";
 
             default:
