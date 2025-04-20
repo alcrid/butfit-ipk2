@@ -5,25 +5,36 @@
 
 ## Content
 
+## Content
+
 1. [Introduction](#introduction)  
 2. [Theory](#theory)  
-   2.1 [TCP Message Protocol](#tcp-message-protocol)  
-   2.2 [UDP Message Protocol](#udp-message-protocol)  
+   &nbsp;&nbsp;2.1 [TCP Message Protocol](#tcp-message-protocol)  
+   &nbsp;&nbsp;2.2 [UDP Message Protocol](#udp-message-protocol)  
 3. [ABNF (Augmented Backus–Naur Form)](#abnf-augmented-backusnaur-form)  
 4. [Code Implementation](#code-implementation)  
-   4.1 [Class Diagram](#class-diagram)  
-   4.2 [TcmMessageClient.cs](#tcmmessageclientcs)  
+   &nbsp;&nbsp;4.1 [Class Diagram](#class-diagram)  
+   &nbsp;&nbsp;4.2 [TcmMessageClient.cs](#tcmmessageclientcs)  
    &nbsp;&nbsp;&nbsp;&nbsp;4.2.1 [ProcessUserInput](#processuserinput)  
    &nbsp;&nbsp;&nbsp;&nbsp;4.2.2 [Sending Messages](#sending-messages)  
-   4.3 [TcpMessage.cs](#tcpmessagecs)  
-   4.4 [UdpMessageClient.cs](#udpmessageclientcs)  
+   &nbsp;&nbsp;4.3 [TcpMessage.cs](#tcpmessagecs)  
+   &nbsp;&nbsp;4.4 [UdpMessageClient.cs](#udpmessageclientcs)  
    &nbsp;&nbsp;&nbsp;&nbsp;4.4.1 [SendUdpMessage](#sendudpmessage)  
-   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1.1 [Message Sending](#message-sending)  
-   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1.2 [Retransmission & Confirmation](#retransmission--confirmation)  
-   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1.3 [Deserialize](#deserialize)  
-   4.5 [UdpMessage.cs](#udpmessagecs)  
-   4.6 [MessageBuffer.cs](#messagebuffercs)  
-5. [Tests](#tests)
+   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1.1 [Message Sending](#message-sending)  
+   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1.2 [Retransmission & Confirmation](#retransmission--confirmation)  
+   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1.3 [Deserialize](#deserialize)  
+   &nbsp;&nbsp;4.5 [UdpMessage.cs](#udpmessagecs)  
+   &nbsp;&nbsp;4.6 [MessageBuffer.cs](#messagebuffercs)  
+5. [Testing](#testing)  
+   &nbsp;&nbsp;5.1 [TCP Testing](#tcp-testing)  
+   &nbsp;&nbsp;&nbsp;&nbsp;5.1.1 [Discord Server Testing](#discord-server-testing)  
+   &nbsp;&nbsp;&nbsp;&nbsp;5.1.2 [Localhost Testing](#localhost-testing)  
+   &nbsp;&nbsp;5.2 [UDP Testing](#udp-testing)  
+   &nbsp;&nbsp;&nbsp;&nbsp;5.2.1 [Discord Server Testing](#discord-server-testing-1)  
+   &nbsp;&nbsp;&nbsp;&nbsp;5.2.2 [Localhost Testing](#localhost-testing-1)  
+   &nbsp;&nbsp;5.3 [Additional Testing](#additional-testing)  
+6. [Bibliography](#bibliography)
+
 
 ## Introduction
 
@@ -346,40 +357,376 @@ public class MessageBuffer<T> : IMessageBuffer<T> where T : Message
     public bool IsEmpty => _buffer.Count == 0;
 }
 ```
+## Testing
 
-// co zrobit dolejska server
-// TCP UDP
+---
 
-tests - 
-TEsting done 
+### TCP Testing
 
-TCP on dolejska server
+#### Discord Server Testing
 
-UDP on dolejska server
+For real world testing, the Discord server provided by Ing. Dolejška was used.  
+It allowed us to verify the functionality of the TCP client against an actual deployed server and inspect real-time communication behavior.
 
-TCP on localhost
-UDP on localhost
-bolest :<
+Wireshark was used to capture traffic, and command-line interaction demonstrated full authentication, message sending, joining channels, and disconnecting.
 
-TESTING SEND BYE
+Below is the captured test session using the official Discord server:
+
+Wireshark output:  
+![TCP Packet Capture](images/tcp.png)
+
+Client input:
+```
+./ipkchat-scan -s anton5.fit.vutbr.cz -t tcp
+/auth xkomanj00 **secret** test
+a
+/join discord.verified-1
+ahoj
+/rename test2
+ahoj3
+(ctrl+c)
+```
+
+---
+
+#### Localhost Testing
+
+Testing of states that weren't covered in Discord server testing.
+
+The command was used to simulate a TCP server locally:
+```bash
+nc -4 -C -l -v 127.0.0.1 4567
+```
+
+##### TESTING SEND BYE
 This was tested and done for each state except join
-./ipk-chat -s -tcp 
+
+**server:**
+```bash
+nc -4 -C -l -v 127.0.0.1 4567
+BYE FROM SERVER
+```
+
+**client:**
+```
+./ipk25chat-client -s localhost -t tcp
+BYE FROM SERVER
+```
+
+##### Receiving !REPLY in auth state
+
+**server:**
+```
+AUTH a AS c USING b
+REPLY NOK IS invalid user
+AUTH vale AS g USING f
+REPLY OK IS valid ser
+BYE FROM g
+```
+
+**client:**
+```
+./ipk25chat-client -s localhost -t tcp
+/auth a b c
+Action Failure: invalid user
+/auth e f g
+Action Success: valid ser
+```
+
+##### Sending messages while waiting for auth or join
+
+**server:**
+```
+nc -4 -C -l -v 127.0.0.1 4567
+Listening on localhost 4567
+Connection received on localhost 59054
+AUTH a AS c USING b
+REPLY OK IS valid user
+MSG FROM c IS msg1
+MSG FROM c IS msg2
+MSG FROM c IS msg3
+JOIN channel1 AS c
+REPLY OK IS switched channel
+MSG FROM c IS msg4
+MSG FROM c IS msg5
+MSG FROM c IS msg6
+BYE FROM c
+```
+
+**client:**
+```
+./ipk25chat-client -s localhost -t tcp
+/auth a b c
+msg1
+msg2
+msg3
+Action Success: valid user
+/join channel1
+msg4
+msg5
+msg6
+Action Success: switched channel
+```
+
+##### Sending a message if auth receives NOK
+
+**server:**
+```
+nc -4 -C -l -v 127.0.0.1 4567
+Listening on localhost 4567
+Connection received on localhost 59338
+AUTH a AS c USING b
+REPLY NOK IS invalid user
+BYE FROM c
+```
+
+**client:**
+```
+./ipk25chat-client -s localhost -t tcp
+/auth a b c
+Action Failure: invalid user
+a
+ERROR: You must be authenticated before sending messages.
+```
+
+##### Receiving REPLY OK or NOK in state OPEN
+
+**server:**
+```
+nc -4 -C -l -v 127.0.0.1 4567
+Listening on localhost 4567
+Connection received on localhost 60922
+AUTH a AS c USING b
+REPLY OK IS valid user
+REPLY OK IS random reply OK
+ERR FROM c IS Malformed message received from server.
+```
+
+**client:**
+```
+./ipk25chat-client -s localhost -t tcp
+/auth a b c
+Action Success: valid user
+ERROR: Malformed message received from server
+```
+
+**server:**
+```
+nc -4 -C -l -v 127.0.0.1 4567
+Listening on localhost 4567
+Connection received on localhost 34250
+AUTH a AS c USING b
+REPLY OK IS valid user
+REPLY NOK IS random Nok
+ERR FROM c IS Malformed message received from server.
+```
+
+**client:**
+```
+./ipk25chat-client -s localhost -t tcp
+/auth a b c
+Action Success: valid user
+ERROR: Malformed message received from server
+```
+
+The reply NOK or OK is understood as a malformed message since it is an invalid type of message received in that state.
+
+##### Invalid response from server
+
+What was tested next:
+Multiple user auth
+
+```
+./ipk-chat -s -tcp
 (press ctrl+c)
-/ serer 
-GETTING ERR,BYE
-This was tested in all states 
-example
-./ipk-chat -s -tcp 
+/ serer
+```
+
+GETTING ERR, BYE
+This was tested in all states  
+Example:
+```
+./ipk-chat -s -tcp
 ERROR FROM server IS An error has occured
 BYE FROM server
-Example : 
+```
 
+Example:
+```
 /TESTING AUTH
 /auth a b c
 msg1
-ERROR: can't send message here 
+ERROR: can't send message here
+```
 
-
-SERVER:
+**server:**
+```
 REPLY IS nOK invaid login
+```
+
+### UDP Testing
+
+#### Discord Server Testing
+
+For real world testing, the Discord server provided by Ing. Dolejška was used.  
+This allowed us to observe how the UDP client handled real-time communication over an actual network, including serialization of messages, message loss, and retransmissions.
+
+Wireshark was used to capture traffic, and command-line input was used to test authentication, channel joining, and message delivery.
+
+Wireshark output:  
+![UDP Packet Capture](images/udp.png)
+
+**client:**
+```
+./ipkchat-scan -s anton5.fit.vutbr.cz -t udp
+/auth xkomanj00 **secret** test
+hello
+/join discord.verified-1
+hello
+(ctrl+c)
+```
+
+#### Localhost Testing
+
+This testing was done using a student-created UDP server available at:  
+https://github.com/okurka12/ipk_proj1_livestream/tree/main
+
+To start the server:
+```bash
+python3 ipk_server.py
+```
+
+##### TESTING: Basic auth + msg + bye
+
+**client:**
+```
+/auth a b c    
+Action Success: Hi, c, this is a successful REPLY message to your AUTH message id=0. You wanted to authenticate under the username a
+msg
+Server: Hi, c! This is a reply MSG to your MSG id=1 content='msg...' :)
+```
+**server:**
+```
+python3 ipk_server.py 
+started server on 0.0.0.0 port 4567
+
+Message from 127.0.0.1:52249 came to port 4567:
+TYPE: AUTH
+ID: 0
+USERNAME: 'a'
+DISPLAY NAME: 'c'
+SECRET: 'b'
+b'\x02\x00\x00a\x00c\x00b\x00'
+Confirming AUTH message id=0
+sending REPLY with result=1 to AUTH msg id=0
+
+Message from 127.0.0.1:52249 came to port dyn2:
+TYPE: MSG
+ID: 1
+DISPLAY NAME: 'c'
+'msg'
+b'\x04\x00\x01c\x00msg\x00'
+Confirming MSG message id=1
+
+Message from 127.0.0.1:52249 came to port dyn2:
+TYPE: BYE
+ID: 2
+b'\xff\x00\x02c\x00'
+Confirming BYE message id=2
+```
+
+##### TESTING: Full lifecycle (auth + join + msg + bye)
+
+**client:**
+```
+./ipk25chat-client -s localhost -t udp 
+/auth a b c
+Action Success: Hi, c, this is a successful REPLY message to your AUTH message id=0. You wanted to authenticate under the username a
+/join channel1
+Action Success: Hi, c, this is a successful REPLY message to your JOIN message id=1. You wanted to join the channel channel1
+[21:39:42] info: project2.Models.UdpMessageClient[0] sending confirmation
+hi
+Server: Hi, c! This is a reply MSG to your MSG id=2 content='hi...' :)
+/rename z
+hi again
+Server: Hi, z! This is a reply MSG to your MSG id=3 content='hi again...' :)
+```
+**server**
+```
+python3 ipk_server.py 
+started server on 0.0.0.0 port 4567
+
+Message from 127.0.0.1:50009 came to port 4567:
+TYPE: AUTH
+ID: 0
+USERNAME: 'a'
+DISPLAY NAME: 'c'
+SECRET: 'b'
+b'\x02\x00\x00a\x00c\x00b\x00'
+Confirming AUTH message id=0
+sending REPLY with result=1 to AUTH msg id=0
+
+Message from 127.0.0.1:50009 came to port dyn2:
+TYPE: JOIN
+ID: 1
+DISPLAY NAME: 'c'
+CHANNEL ID: 'channel1'
+b'\x03\x00\x01channel1\x00c\x00'
+Confirming JOIN message id=1
+sending REPLY with result=1 to JOIN msg id=1
+
+Message from 127.0.0.1:50009 came to port dyn2:
+TYPE: MSG
+ID: 2
+DISPLAY NAME: 'c'
+'hi'
+b'\x04\x00\x02c\x00hi\x00'
+Confirming MSG message id=2
+
+Message from 127.0.0.1:50009 came to port dyn2:
+TYPE: MSG
+ID: 3
+DISPLAY NAME: 'z'
+'hi again'
+b'\x04\x00\x03z\x00hi again\x00'
+Confirming MSG message id=3
+
+Message from 127.0.0.1:50009 came to port dyn2:
+TYPE: BYE
+ID: 4
+b'\xff\x00\x04z\x00'
+Confirming BYE message id=4
+```
+
+
+### Additional Testing
+
+Additional testing was also performed using student-created tests to help catch edge cases and unusual behaviors. They weren't the only tests used, but forgoing tests that provide valuable edge cases or highlight potential problems I might have missed during development would have been in my opinion not the best idea.
+
+You can find the test repository here:  
+[https://github.com/Vlad6422/VUT_IPK_CLIENT_TESTS](https://github.com/Vlad6422/VUT_IPK_CLIENT_TESTS) 
+
+## Bibliography
+
+- [RFC5234] Crocker, D. and Overell, P. Augmented BNF for Syntax Specifications: ABNF [online]. January 2008. [cited 2025-04-20]. DOI: 10.17487/RFC5234. Available at: https://datatracker.ietf.org/doc/html/rfc5234  
+
+- [RFC768] Postel, J. User Datagram Protocol [online]. March 1997. [cited 2025-04-20]. DOI: 10.17487/RFC0768. Available at: https://datatracker.ietf.org/doc/html/rfc768  
+
+- Wikipedia contributors. Augmented Backus–Naur Form [online]. Wikipedia, The Free Encyclopedia. [cited 2025-04-20]. Available at: https://en.wikipedia.org/wiki/Augmented_Backus%E2%80%93Naur_form
+
+- [RFC9293] Eddy, W. Transmission Control Protocol (TCP) [online]. August 2022. [cited 2025-04-20]. DOI: 10.17487/RFC9293. Available at: https://datatracker.ietf.org/doc/html/rfc9293  
+
+- Microsoft. System.Net.Sockets.TcpClient Class [online]. [cited 2025-04-20]. Available at: https://learn.microsoft.com/en-us/dotnet/api/system.net.sockets.tcpclient?view=net-9.0  
+
+- Microsoft. System.Net.Sockets.UdpClient Class [online]. [cited 2025-04-20]. Available at: https://learn.microsoft.com/en-us/dotnet/api/system.net.sockets.udpclient?view=net-9.0  
+
+- Vladislav Koman, "VUT IPK Client Tests" [online]. GitHub Repository. [cited 2025-04-20]. Available at: https://github.com/Vlad6422/VUT_IPK_CLIENT_TESTS  
+
+- Ondřej Kurka, "UDP Test Server for IPK Project 1" [online]. GitHub Repository. [cited 2025-04-20]. Available at: https://github.com/okurka12/ipk_proj1_livestream/blob/main/README.md  
+
+- OpenAI ChatGPT. Used as a development aid during implementation, particularly for asynchronous programming and cancellation tokens.  
+
+- OpenAI. ChatGPT. Used during the project for formatting assistance, improving Markdown readability, and organizing documentation structure. [cited 2025-04-20]. Available at: https://openai.com/chatgpt
+
+- Project 1 (Argument Parser). Concepts and structure reused for command-line parsing logic.
 

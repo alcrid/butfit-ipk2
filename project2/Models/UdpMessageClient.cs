@@ -118,6 +118,7 @@ public class UdpMessageClient(
                     case UdpMessageType.Ping:
                         break;
                     case UdpMessageType.Bye:
+                        logger.LogInformation("THIS WAS RUN");
                         EndCommunication(0);
                         break;
                     case UdpMessageType.Err:
@@ -227,7 +228,7 @@ public class UdpMessageClient(
                     Type = UdpMessageType.Bye,
                     DisplayName = _user.DisplayName
                 });
-                break;
+                continue;
             }
 
             if (string.IsNullOrWhiteSpace(input))
@@ -290,13 +291,6 @@ public class UdpMessageClient(
                     break;
             }
         }
-        
-        while (true)
-        {
-            //wait until all things are closed
-            Thread.Sleep(100);
-        }
-        
     }
 
     public Dictionary<string, object> Deserialize(byte[] data)
@@ -354,12 +348,22 @@ public class UdpMessageClient(
                 result["MessageContents"] = ReadZeroTerminatedString(reader);
                 break;
 
+            // case UdpMessageType.Bye:
+            //     messageId = ReadUInt16(reader);
+            //     result["MessageID"] = messageId;
+            //     result["DisplayName"] = ReadZeroTerminatedString(reader);
+            //     break;
             case UdpMessageType.Bye:
                 messageId = ReadUInt16(reader);
                 result["MessageID"] = messageId;
+
+                if (reader.BaseStream.Position == reader.BaseStream.Length)
+                {
+                    throw new InvalidDataException("BYE message missing DisplayName");
+                }
+
                 result["DisplayName"] = ReadZeroTerminatedString(reader);
                 break;
-
             case UdpMessageType.Ping:
                 result["MessageID"] = ReadUInt16(reader);
                 break;
@@ -410,7 +414,6 @@ public class UdpMessageClient(
                 continue;
             }
 
-            logger.LogInformation("entering sending switch");
             if (message != null)
                 switch (message.Type)
                 {
@@ -496,7 +499,6 @@ public class UdpMessageClient(
 
         var packet = message.Serialize(_currentMessageId);
         
-        logger.LogInformation("packet sent");
         int retransmissionCount = 0;
         bool confirmed = false;
 
@@ -557,6 +559,7 @@ public class UdpMessageClient(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to send ERR message.");
+            Console.WriteLine("ERROR: Failed to send ERR Messagae");
         }
         finally
         {
