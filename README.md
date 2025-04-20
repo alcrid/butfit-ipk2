@@ -78,7 +78,7 @@ In this project, ABNF was used to formally define the structure of **TCP protoco
 ## Code Implementation
 
 ### class diagram 
-(from rider)
+![Class diagram image](images/class_diagram.png)
 
 ### TcmMessageClient.cs
 
