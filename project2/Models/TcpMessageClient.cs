@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Sockets;
 using project2.Enums;
 using project2.Utils;
@@ -17,8 +16,8 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
     private readonly User _user = new();
     private readonly MessageBuffer<TcpMessage> _messageBuffer = new();
     private ClientState _state;
-    private bool WaitingForAuthReply;
-    private bool WaitingForJoinReply;
+    private bool _waitingForAuthReply;
+    private bool _waitingForJoinReply;
 
     public void StartCommunication()
     {
@@ -26,7 +25,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
         {
             _token = _cts.Token;
 
-            Console.CancelKeyPress += (s, e) =>
+            Console.CancelKeyPress += (_, e) =>
             {
                 e.Cancel = true;
                 _messageBuffer.Add(new TcpMessage
@@ -64,7 +63,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
     private async Task ReceiveMessagesAsync()
     {
         try
-        {  
+        {
             var buffer = string.Empty;
             while (!_token.IsCancellationRequested)
             {
@@ -86,7 +85,9 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                     string line = messages[i].Trim();
                     var words = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-                    if (words.Length >= 4 && words[0].Equals("ERR", StringComparison.OrdinalIgnoreCase) && words[1].Equals("FROM", StringComparison.OrdinalIgnoreCase) && words[3].Equals("IS", StringComparison.OrdinalIgnoreCase))
+                    if (words.Length >= 4 && words[0].Equals("ERR", StringComparison.OrdinalIgnoreCase) &&
+                        words[1].Equals("FROM", StringComparison.OrdinalIgnoreCase) &&
+                        words[3].Equals("IS", StringComparison.OrdinalIgnoreCase))
                     {
                         string displayName = words[2];
                         string errorContent = string.Join(' ', words.Skip(4));
@@ -94,7 +95,8 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                         EndCommunication(1);
                         return;
                     }
-                    else if (words.Length >= 3 && words[0].Equals("BYE", StringComparison.OrdinalIgnoreCase) && words[1].Equals("FROM", StringComparison.OrdinalIgnoreCase))
+                    else if (words.Length >= 3 && words[0].Equals("BYE", StringComparison.OrdinalIgnoreCase) &&
+                             words[1].Equals("FROM", StringComparison.OrdinalIgnoreCase))
                     {
                         string displayName = words[2];
                         Console.WriteLine($"BYE FROM {displayName}");
@@ -108,39 +110,42 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                             break;
 
                         case ClientState.auth:
-                            if (line.StartsWith("REPLY OK IS ", StringComparison.OrdinalIgnoreCase) && WaitingForAuthReply)
+                            if (line.StartsWith("REPLY OK IS ", StringComparison.OrdinalIgnoreCase) &&
+                                _waitingForAuthReply)
                             {
                                 string message = line["REPLY OK IS ".Length..].Trim();
                                 Console.WriteLine($"Action Success: {message}");
                                 _state = ClientState.open;
-                                _user.setIsAuthenticated(true);
-                                WaitingForAuthReply = false;
+                                _user.SetIsAuthenticated(true);
+                                _waitingForAuthReply = false;
                             }
-                            else if (line.StartsWith("REPLY NOK IS ", StringComparison.OrdinalIgnoreCase) && WaitingForAuthReply)
+                            else if (line.StartsWith("REPLY NOK IS ", StringComparison.OrdinalIgnoreCase) &&
+                                     _waitingForAuthReply)
                             {
                                 string message = line["REPLY NOK IS ".Length..].Trim();
                                 Console.WriteLine($"Action Failure: {message}");
                                 _state = ClientState.auth;
-                                WaitingForAuthReply = false;
+                                _waitingForAuthReply = false;
                             }
                             else
                             {
-                                Console.WriteLine("ERROR: Recieved invalid response from server");
+                                Console.WriteLine("ERROR: Received invalid response from server");
                                 SendErrAndEndCommunication("Invalid response from server");
                             }
+
                             break;
 
                         case ClientState.open:
                             if (line.StartsWith("REPLY IS OK ", StringComparison.OrdinalIgnoreCase) ||
                                 line.StartsWith("REPLY IS NOK ", StringComparison.OrdinalIgnoreCase))
                             {
-                                Console.WriteLine("ERROR: Recieved invalid response from server");
+                                Console.WriteLine("ERROR: Received invalid response from server");
                                 SendErrAndEndCommunication("Received invalid message REPLY IS OK or NOK from server");
                             }
                             else if (words.Length >= 4 &&
-                                    words[0].Equals("MSG", StringComparison.OrdinalIgnoreCase) &&
-                                    words[1].Equals("FROM", StringComparison.OrdinalIgnoreCase) &&
-                                    words[3].Equals("IS", StringComparison.OrdinalIgnoreCase))
+                                     words[0].Equals("MSG", StringComparison.OrdinalIgnoreCase) &&
+                                     words[1].Equals("FROM", StringComparison.OrdinalIgnoreCase) &&
+                                     words[3].Equals("IS", StringComparison.OrdinalIgnoreCase))
                             {
                                 string displayName = words[2];
                                 string content = string.Join(' ', words.Skip(4));
@@ -148,30 +153,33 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                             }
                             else
                             {
-                                Console.WriteLine("ERROR: Malformed message recieved from server");
+                                Console.WriteLine("ERROR: Malformed message received from server");
                                 SendErrAndEndCommunication("Malformed message received from server.");
                             }
+
                             break;
 
                         case ClientState.join:
-                            if (line.StartsWith("REPLY OK IS ", StringComparison.OrdinalIgnoreCase) && WaitingForJoinReply)
+                            if (line.StartsWith("REPLY OK IS ", StringComparison.OrdinalIgnoreCase) &&
+                                _waitingForJoinReply)
                             {
                                 string message = line["REPLY OK IS ".Length..].Trim();
                                 Console.WriteLine($"Action Success: {message}");
                                 _state = ClientState.open;
-                                WaitingForJoinReply = false;
+                                _waitingForJoinReply = false;
                             }
-                            else if (line.StartsWith("REPLY NOK IS ", StringComparison.OrdinalIgnoreCase) && WaitingForJoinReply)
+                            else if (line.StartsWith("REPLY NOK IS ", StringComparison.OrdinalIgnoreCase) &&
+                                     _waitingForJoinReply)
                             {
                                 string message = line["REPLY NOK IS ".Length..].Trim();
                                 Console.WriteLine($"Action Failure: {message}");
                                 _state = ClientState.open;
-                                WaitingForJoinReply = false;
+                                _waitingForJoinReply = false;
                             }
                             else if (words.Length >= 4 &&
-                                    words[0].Equals("MSG", StringComparison.OrdinalIgnoreCase) &&
-                                    words[1].Equals("FROM", StringComparison.OrdinalIgnoreCase) &&
-                                    words[3].Equals("IS", StringComparison.OrdinalIgnoreCase))
+                                     words[0].Equals("MSG", StringComparison.OrdinalIgnoreCase) &&
+                                     words[1].Equals("FROM", StringComparison.OrdinalIgnoreCase) &&
+                                     words[3].Equals("IS", StringComparison.OrdinalIgnoreCase))
                             {
                                 string displayName = words[2];
                                 string content = string.Join(' ', words.Skip(4));
@@ -179,23 +187,24 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                             }
                             else
                             {
-                                Console.WriteLine("ERROR: Malformed message recieved from server");
+                                Console.WriteLine("ERROR: Malformed message received from server");
                                 SendErrAndEndCommunication("ERROR: Malformed message received from server.");
                             }
+
                             break;
 
                         case ClientState.end:
                             return;
                     }
-                } 
-            
+                }
+
                 // the last message becomes the buffer
-                buffer = messages[messages.Length - 1];
+                buffer = messages[^1];
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"ERROR: Recieved error {ex}");
+            Console.WriteLine($"ERROR: Received error {ex}");
         }
     }
 
@@ -236,8 +245,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
                     break;
 
                 case "/rename":
-                    string error;
-                    _user.SetDisplayName(args[0], out error);
+                    _user.SetDisplayName(args[0], out var error);
                     if (!string.IsNullOrEmpty(error))
                     {
                         Console.WriteLine(error);
@@ -282,17 +290,16 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
             // checks if any message are in the buffer
             if (_messageBuffer.IsEmpty)
             {
-                await Task.Delay(100);
+                await Task.Delay(100, _token);
                 continue;
             }
 
             var message = _messageBuffer.Peek();
-            string error;
 
             // checks if is allowed to send messages and isn't waiting for a reply
-            bool allowedToSend = message.Type switch
+            bool allowedToSend = message != null && message.Type switch
             {
-                TcpMessageType.MSG => !WaitingForAuthReply && !WaitingForJoinReply,
+                TcpMessageType.MSG => !_waitingForAuthReply && !_waitingForJoinReply,
                 _ => true
             };
 
@@ -304,94 +311,99 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
 
             try
             {
-                switch (message.Type)
-                {  
-                    case TcpMessageType.AUTH:
-                        // Checks if arguments passed to message are correct
-                        if (_user.isAuthenticated)
-                        {
-                            Console.WriteLine("ERROR: Already authenticated");
-                            break;
-                        }
-                        else if (message.MessageArgs.Length != 3)
-                        {
-                            Console.WriteLine("ERROR: Usage: /auth <username> <secret> <displayName>");
-                            break;
-                        }
-                        else if (!_user.SetUsername(message.MessageArgs[0], out error) ||
-                            !_user.SetSecret(message.MessageArgs[1], out error) ||
-                            !_user.SetDisplayName(message.MessageArgs[2], out error))
-                        {
-                            Console.WriteLine(error);
-                            break;
-                        }
+                if (message != null)
+                {
+                    string error;
+                    switch (message.Type)
+                    {
+                        case TcpMessageType.AUTH:
+                            // Checks if arguments passed to message are correct
+                            if (_user.IsAuthenticated)
+                            {
+                                Console.WriteLine("ERROR: Already authenticated");
+                                break;
+                            }
+                            else if (message.MessageArgs.Length != 3)
+                            {
+                                Console.WriteLine("ERROR: Usage: /auth <username> <secret> <displayName>");
+                                break;
+                            }
+                            else if (!_user.SetUsername(message.MessageArgs[0], out error) ||
+                                     !_user.SetSecret(message.MessageArgs[1], out error) ||
+                                     !_user.SetDisplayName(message.MessageArgs[2], out error))
+                            {
+                                Console.WriteLine(error);
+                                break;
+                            }
 
-                        var authSerialized = message.Serialize(out error);
-                        if (!string.IsNullOrEmpty(error))
-                        {
-                            Console.WriteLine(error);
+                            var authSerialized = message.Serialize(out error);
+                            if (!string.IsNullOrEmpty(error))
+                            {
+                                Console.WriteLine(error);
+                                break;
+                            }
+
+                            await _writer!.WriteAsync(authSerialized);
+                            _state = ClientState.auth;
+                            _waitingForAuthReply = true;
                             break;
-                        }
 
-                        await _writer!.WriteAsync(authSerialized);
-                        _state = ClientState.auth;
-                        WaitingForAuthReply = true;
-                        break;    
+                        case TcpMessageType.MSG:
+                            if (!_user.IsAuthenticated)
+                            {
+                                Console.WriteLine("ERROR: You must be authenticated before sending messages.");
+                                break;
+                            }
+                            else if (_state != ClientState.open)
+                            {
+                                Console.WriteLine("ERROR: cannot send message.");
+                                break;
+                            }
 
-                    case TcpMessageType.MSG:
-                        if (!_user.isAuthenticated)
-                        {
-                            Console.WriteLine("ERROR: You must be authenticated before sending messages.");
+                            var msgSerialized = message.Serialize(out error);
+                            if (!string.IsNullOrEmpty(error))
+                            {
+                                Console.WriteLine(error);
+                                break;
+                            }
+
+                            await _writer!.WriteAsync(msgSerialized);
                             break;
-                        }
-                        else if (_state != ClientState.open)
-                        {
-                            Console.WriteLine("ERROR: cannot send message.");
+
+                        case TcpMessageType.JOIN:
+                            if (!_user.IsAuthenticated)
+                            {
+                                Console.WriteLine("ERROR: You must be authenticated before joining a channel.");
+                                break;
+                            }
+
+                            message.SetDisplayName(_user.DisplayName);
+                            var joinSerialized = message.Serialize(out error);
+                            if (!string.IsNullOrEmpty(error))
+                            {
+                                Console.WriteLine(error);
+                                break;
+                            }
+
+                            await _writer!.WriteAsync(joinSerialized);
+                            _state = ClientState.join;
+                            _waitingForJoinReply = true;
                             break;
-                        }
 
-                        var msgSerialized = message.Serialize(out error);
-                        if (!string.IsNullOrEmpty(error))
-                        {
-                            Console.WriteLine(error);
-                            break;
-                        }
-                        await _writer!.WriteAsync(msgSerialized);
-                        break;
+                        case TcpMessageType.BYE:
+                            var byeSerialized = message.Serialize(out error);
+                            if (!string.IsNullOrEmpty(error))
+                            {
+                                Console.WriteLine(error);
+                                break;
+                            }
 
-                    case TcpMessageType.JOIN:
-                        if (!_user.isAuthenticated)
-                        {
-                            Console.WriteLine("ERROR: You must be authenticated before joining a channel.");
-                            break;
-                        }
-
-                        message.SetDisplayName(_user.DisplayName);
-                        var joinSerialized = message.Serialize(out error);
-                        if (!string.IsNullOrEmpty(error))
-                        {
-                            Console.WriteLine(error);
-                            break;
-                        }
-
-                        await _writer!.WriteAsync(joinSerialized);
-                        _state = ClientState.join;
-                        WaitingForJoinReply = true;
-                        break;
-
-                    case TcpMessageType.BYE:
-                        var byeSerialized = message.Serialize(out error);
-                        if (!string.IsNullOrEmpty(error))
-                        {
-                            Console.WriteLine(error);
-                            break;
-                        }
-
-                        await _writer!.WriteAsync(byeSerialized);
-                        EndCommunication(0);
-                        return;
-
+                            await _writer!.WriteAsync(byeSerialized);
+                            EndCommunication(0);
+                            return;
+                    }
                 }
+
                 _messageBuffer.TryGet(out _);
             }
             catch (Exception ex)
@@ -413,6 +425,11 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
             };
 
             var serializedMsg = errMessage.Serialize(out var error);
+            if (!string.IsNullOrEmpty(error))
+            {
+                Console.WriteLine(error);
+            }
+
             _writer?.Write(serializedMsg);
         }
         catch (Exception ex)
@@ -424,7 +441,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
             EndCommunication(1);
         }
     }
- 
+
     private void SendByeAndEndCommunication()
     {
         try
@@ -436,8 +453,13 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
             };
 
             var serializedMsg = errMessage.Serialize(out var error);
+            if (!string.IsNullOrEmpty(error))
+            {
+                Console.WriteLine(error);
+            }
+
             _writer?.Write(serializedMsg);
-    }
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to send ERR message.");
@@ -447,6 +469,7 @@ public class TcpMessageClient(string server, int port, ILogger<TcpMessageClient>
             EndCommunication(0);
         }
     }
+
     private void EndCommunication(int errorCode)
     {
         _cts.Cancel();

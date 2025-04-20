@@ -1,7 +1,4 @@
 using System.Text;
-using System.Net;
-using System.Reflection.Emit;
-using System.Text.RegularExpressions;
 using project2.Enums;
 
 namespace project2.Models;
@@ -11,12 +8,10 @@ public class UdpMessage : Message
     public UdpMessageType Type { get; set; }
     public string DisplayName { get; set; } = "Unknown";
     public Byte[] Content { get; set; } = [];
-
     public string[] MessageArgs { get; set; } = Array.Empty<string>();
 
-    public Byte[] Serialize(out string error, ushort messageId)
+    public Byte[] Serialize(ushort messageId)
     {
-        error = string.Empty;
         switch (Type)
         {
             case UdpMessageType.AUTH:
@@ -44,13 +39,13 @@ public class UdpMessage : Message
             case UdpMessageType.JOIN:
                 return CreateJoinMessage(
                     messageId: messageId,
-                    channelId:MessageArgs[0],
-                    displayName:DisplayName
+                    channelId: MessageArgs[0],
+                    displayName: DisplayName
                 );
             case UdpMessageType.ERR:
                 return CreateErrMessage(
                     messageId: messageId,
-                    errorMessage:MessageArgs[0],
+                    errorMessage: MessageArgs[0],
                     displayName: DisplayName
                 );
         }
@@ -58,7 +53,6 @@ public class UdpMessage : Message
         return [];
     }
 
-    
     private byte[] CreateErrMessage(ushort messageId, string displayName, string errorMessage)
     {
         var encoding = Encoding.UTF8;
@@ -72,9 +66,9 @@ public class UdpMessage : Message
 
         int offset = 0;
 
-        message[offset++] = 0xFE;                        // ERR type
-        message[offset++] = (byte)(messageId >> 8);      // Message ID high byte
-        message[offset++] = (byte)(messageId & 0xFF);    // Message ID low byte
+        message[offset++] = 0xFE; // ERR type
+        message[offset++] = (byte)(messageId >> 8); // Message ID high byte
+        message[offset++] = (byte)(messageId & 0xFF); // Message ID low byte
 
         offset = CopyToBuffer(message, offset, displayNameBytes);
         CopyToBuffer(message, offset, errorMessageBytes);

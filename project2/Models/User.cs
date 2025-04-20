@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using project2.Utils;
 
 namespace project2.Models;
 
@@ -8,14 +7,15 @@ public class User
     public string Username { get; private set; } = "";
     public string DisplayName { get; private set; } = "Unknown";
     public string Secret { get; private set; } = "";
-    public bool isAuthenticated {get; private set;} = false;
+    public bool IsAuthenticated { get; private set; }
 
     private static readonly Regex UsernameRegex = new(@"^[a-zA-Z0-9_-]{1,20}$");
     private static readonly Regex DisplayNameRegex = new(@"^[\x21-\x7E]{1,20}$");
     private static readonly Regex SecretRegex = new(@"^[a-zA-Z0-9_-]{1,128}$");
 
-    public void setIsAuthenticated(bool isAuth){
-        isAuthenticated = isAuth;
+    public void SetIsAuthenticated(bool isAuth)
+    {
+        IsAuthenticated = isAuth;
     }
 
     public bool SetUsername(string username, out string error)
