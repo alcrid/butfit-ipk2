@@ -202,7 +202,6 @@ public class UdpMessageClient(
 
     private void SendConfirmationPacket(ushort confirmingId)
     {
-        logger.LogInformation("sending confirmation");
         var confirmMessage = new UdpMessage();
         confirmMessage.DisplayName = _user.DisplayName;
         confirmMessage.Type = UdpMessageType.Confirm;
@@ -216,8 +215,6 @@ public class UdpMessageClient(
     {
         while (!_token.IsCancellationRequested)
         {
-            logger.LogInformation("status: " + _state);
-
             string? input = Console.ReadLine();
 
             if (input == null)
@@ -304,7 +301,6 @@ public class UdpMessageClient(
         {
             ["Type"] = (UdpMessageType)typeByte
         };
-        logger.LogInformation($"type: {(UdpMessageType)typeByte}");
         switch ((UdpMessageType)typeByte)
         {
             case UdpMessageType.Confirm:
@@ -471,7 +467,7 @@ public class UdpMessageClient(
                         _state = ClientState.Join;
                         _waitingForJoinReply = true;
 
-                        logger.LogInformation("sending msg");
+                        logger.LogInformation("sending join");
                         await SendUdpMessage(message);
                         break;
 
@@ -558,8 +554,7 @@ public class UdpMessageClient(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to send ERR message.");
-            Console.WriteLine("ERROR: Failed to send ERR Messagae");
+            Console.WriteLine($"ERROR: {ex}");
         }
         finally
         {
